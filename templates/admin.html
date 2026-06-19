@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI NMS — Admin</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #c9d1d9; --muted: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --red: #f85149; --yellow: #d29922;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; font-size: 14px; }
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 24px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  header h1 { font-size: 18px; font-weight: 600; }
+  nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; }
+  nav a:hover { background: var(--border); }
+  main { max-width: 680px; margin: 32px auto; padding: 0 16px; display: grid; gap: 20px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 24px; }
+  .section-label { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 16px; }
+  .field { display: grid; gap: 6px; margin-bottom: 14px; }
+  .field:last-child { margin-bottom: 0; }
+  label { font-size: 12px; color: var(--muted); }
+  input[type=text], input[type=password], select {
+    width: 100%; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 10px; font-size: 13px; font-family: monospace;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  button { cursor: pointer; border: none; border-radius: 6px; padding: 9px 20px; font-size: 13px; font-weight: 600; }
+  .btn-primary { background: var(--accent); color: #0d1117; }
+  .btn-primary:hover { opacity: .85; }
+  .status-msg { font-size: 13px; margin-top: 12px; min-height: 20px; }
+  .ok { color: var(--green); }
+  .err { color: var(--red); }
+  .badge-key { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(63,185,80,.15); color: var(--green); border: 1px solid var(--green); }
+  .badge-nokey { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(248,81,73,.15); color: var(--red); border: 1px solid var(--red); }
+  .row { display: flex; gap: 10px; align-items: center; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>AI NMS — Admin</h1>
+  <nav style="margin-left:auto; display:flex; gap:8px;">
+    <a href="/">← Dashboard</a>
+    <a href="/accuracy">Accuracy</a>
+  </nav>
+</header>
+
+<main>
+  <div class="card">
+    <div class="section-label">LLM 백엔드 설정</div>
+
+    <div class="field">
+      <label>Active Backend</label>
+      <select id="active_backend">
+        <option value="dgx">DGX (Qwen2.5-14B)</option>
+        <option value="claude">Claude (직접)</option>
+      </select>
+    </div>
+
+    <hr>
+    <div class="section-label" style="margin-top:4px;">DGX 설정</div>
+
+    <div class="field">
+      <label>DGX URL</label>
+      <input type="text" id="dgx_url" placeholder="http://192.168.x.x:8000">
+    </div>
+    <div class="field">
+      <label>DGX API Key <span style="color:var(--muted);">(보통 dummy)</span></label>
+      <input type="password" id="dgx_api_key" placeholder="dummy">
+    </div>
+    <div class="field">
+      <label>DGX Chat Model</label>
+      <input type="text" id="dgx_model" placeholder="Qwen2.5-14B">
+    </div>
+    <div class="field">
+      <label>DGX Embed Model</label>
+      <input type="text" id="dgx_embed_model" placeholder="Qwen2.5-14B">
+    </div>
+
+    <hr>
+    <div class="section-label" style="margin-top:4px;">Claude 설정 (fallback)</div>
+
+    <div class="field">
+      <label>Claude API Key</label>
+      <input type="password" id="claude_api_key" placeholder="sk-ant-...">
+    </div>
+    <div class="field">
+      <label>Claude Model</label>
+      <input type="text" id="claude_model" placeholder="claude-sonnet-4-6">
+    </div>
+
+    <hr>
+    <div class="row">
+      <span id="key-dgx"></span>
+      <span id="key-claude"></span>
+    </div>
+
+    <div style="margin-top:16px;">
+      <button class="btn-primary" onclick="saveSettings()">저장</button>
+      <div class="status-msg" id="status-msg"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+async function loadSettings() {
+  try {
+    const data = await fetch('/api/admin/settings').then(r => r.json());
+    document.getElementById('active_backend').value = data.active_backend || 'dgx';
+    document.getElementById('dgx_url').value = data.dgx_url || '';
+    document.getElementById('dgx_model').value = data.dgx_model || 'Qwen2.5-14B';
+    document.getElementById('dgx_embed_model').value = data.dgx_embed_model || 'Qwen2.5-14B';
+    document.getElementById('claude_model').value = data.claude_model || 'claude-sonnet-4-6';
+    // 키는 마스킹 — placeholder로만 표시
+    document.getElementById('dgx_api_key').placeholder = data.has_dgx_key ? '(설정됨 — 변경하려면 입력)' : 'dummy';
+    document.getElementById('claude_api_key').placeholder = data.has_claude_key ? '(설정됨 — 변경하려면 입력)' : 'sk-ant-...';
+    document.getElementById('key-dgx').outerHTML =
+      `<span id="key-dgx" class="${data.has_dgx_key ? 'badge-key' : 'badge-nokey'}">${data.has_dgx_key ? 'DGX Key ✔' : 'DGX Key 없음'}</span>`;
+    document.getElementById('key-claude').outerHTML =
+      `<span id="key-claude" class="${data.has_claude_key ? 'badge-key' : 'badge-nokey'}">${data.has_claude_key ? 'Claude Key ✔' : 'Claude Key 없음'}</span>`;
+  } catch(e) {
+    document.getElementById('status-msg').innerHTML = `<span class="err">로드 실패: ${e.message}</span>`;
+  }
+}
+
+async function saveSettings() {
+  const body = {
+    active_backend: document.getElementById('active_backend').value,
+    dgx_url: document.getElementById('dgx_url').value,
+    dgx_model: document.getElementById('dgx_model').value,
+    dgx_embed_model: document.getElementById('dgx_embed_model').value,
+    claude_model: document.getElementById('claude_model').value,
+  };
+  // 키 필드: 비어있으면 전송 안 함 (기존값 유지)
+  const dgx_key = document.getElementById('dgx_api_key').value;
+  const claude_key = document.getElementById('claude_api_key').value;
+  if (dgx_key) body.dgx_api_key = dgx_key;
+  if (claude_key) body.claude_api_key = claude_key;
+
+  try {
+    const res = await fetch('/api/admin/settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '오류');
+    document.getElementById('status-msg').innerHTML = '<span class="ok">✔ 저장 완료</span>';
+    // 키 입력 필드 초기화 후 재로드
+    document.getElementById('dgx_api_key').value = '';
+    document.getElementById('claude_api_key').value = '';
+    await loadSettings();
+  } catch(e) {
+    document.getElementById('status-msg').innerHTML = `<span class="err">저장 실패: ${e.message}</span>`;
+  }
+}
+
+loadSettings();
+</script>
+</body>
+</html>

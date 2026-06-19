@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI NMS — Flywheel Demo</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #c9d1d9; --muted: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --red: #f85149; --yellow: #d29922;
+    --purple: #bc8cff; --orange: #f0883e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; font-size: 14px; }
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 24px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  header h1 { font-size: 18px; font-weight: 600; }
+  .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; }
+  nav a:hover { background: var(--border); }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px; display: grid; gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+  .step-label { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 10px; }
+  textarea { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-family: monospace; font-size: 13px; resize: vertical; }
+  button { cursor: pointer; border: none; border-radius: 6px; padding: 8px 16px; font-size: 13px; font-weight: 600; transition: opacity .15s; }
+  button:hover { opacity: .8; }
+  .btn-primary { background: var(--accent); color: #0d1117; }
+  .btn-green { background: var(--green); color: #0d1117; }
+  .btn-red { background: var(--red); color: #fff; }
+  .btn-ghost { background: var(--border); color: var(--text); }
+  select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; font-size: 13px; }
+  input[type=text], input[type=number] { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; font-size: 13px; width: 100%; }
+  .row { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; }
+  .badge-green { background: rgba(63,185,80,.2); color: var(--green); border: 1px solid var(--green); }
+  .badge-red { background: rgba(248,81,73,.2); color: var(--red); border: 1px solid var(--red); }
+  .badge-blue { background: rgba(88,166,255,.2); color: var(--accent); border: 1px solid var(--accent); }
+  .badge-yellow { background: rgba(210,153,34,.2); color: var(--yellow); border: 1px solid var(--yellow); }
+  .badge-purple { background: rgba(188,140,255,.2); color: var(--purple); border: 1px solid var(--purple); }
+  .conf-bar { height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; width: 160px; display: inline-block; vertical-align: middle; }
+  .conf-fill { height: 100%; background: var(--accent); }
+  .similar-item { font-size: 12px; color: var(--muted); padding: 4px 0; border-bottom: 1px solid var(--border); }
+  .similar-item:last-child { border: none; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+  .stat-card { text-align: center; padding: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
+  .stat-value { font-size: 28px; font-weight: 700; color: var(--accent); }
+  .stat-label { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; color: var(--muted); padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  td { padding: 7px 10px; border-bottom: 1px solid rgba(48,54,61,.5); }
+  tr:hover td { background: rgba(255,255,255,.03); }
+  #result-area { min-height: 20px; }
+  .hidden { display: none !important; }
+  .loading { color: var(--muted); font-style: italic; }
+  .error-msg { color: var(--red); font-size: 12px; }
+  #auto-result { font-size: 13px; color: var(--green); margin-top: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="live-dot"></div>
+  <h1>AI NMS — Flywheel Demo</h1>
+  <nav style="margin-left:auto; display:flex; gap:8px;">
+    <a href="/accuracy">Accuracy →</a>
+    <a href="/admin">Admin</a>
+  </nav>
+</header>
+
+<main>
+
+<!-- STEP 1 -->
+<div class="card">
+  <div class="step-label">Step 1 — 로그 이벤트 입력</div>
+  <div class="row" style="margin-bottom:10px;">
+    <select id="sample-select" style="flex:1;">
+      <option value="">샘플 불러오기 ▼</option>
+      <option value="nova-compute is not responding, heartbeat missed for 60 seconds">nova-compute 응답 없음 (easy)</option>
+      <option value="No valid host was found. There are not enough hosts available for the flavor requested due to insufficient RAM">스케줄러 자원 부족 (medium)</option>
+      <option value="Authentication failure for user admin from 192.168.1.100 - 5 consecutive failures detected">인증 반복 실패 (hard)</option>
+      <option value="Failed to schedule vm instance after retry. No suitable host found.">인스턴스 스케줄 실패 (medium)</option>
+      <option value="Disk space usage reached 97% on /dev/sda1. Consider cleaning up old images.">디스크 포화 (easy)</option>
+      <option value="Timeout waiting for RPC reply from nova-conductor after 30.5s, will retry">RPC 타임아웃 (easy)</option>
+      <option value="kernel: BUG: soft lockup - CPU#0 stuck for 23s! hardware failure suspected">커널 패닉 (hard)</option>
+      <option value="oslo.messaging connection refused to rabbitmq broker at rabbitmq.internal:5672">RabbitMQ 연결 끊김 (medium)</option>
+      <option value="data integrity check failed on volume vol-00123456, possible corruption detected">데이터 무결성 오류 (hard)</option>
+      <option value="live migration failed for instance i-00001234, rescheduling to another host">라이브 마이그레이션 실패 (hard)</option>
+    </select>
+  </div>
+  <textarea id="log-input" rows="4" placeholder="로그 라인을 입력하거나 위에서 샘플을 선택하세요..."></textarea>
+  <div style="margin-top:10px;">
+    <button class="btn-primary" onclick="analyzeLog()">분석 ▶</button>
+  </div>
+</div>
+
+<!-- STEP 2 -->
+<div class="card" id="result-area">
+  <div class="step-label">Step 2 — AI Shadow 분석</div>
+  <div id="analysis-content" class="loading">분석 결과가 여기 표시됩니다.</div>
+</div>
+
+<!-- STEP 3 + 4 -->
+<div class="grid2" id="action-area" style="display:none;">
+  <div class="card">
+    <div class="step-label">Step 3 — 승인 (정상 학습 데이터)</div>
+    <p style="font-size:13px; color:var(--muted); margin-bottom:14px;">AI 추천이 올바르면 승인하세요. 승인된 케이스는 학습 데이터로 추가됩니다.</p>
+    <button class="btn-green" onclick="approveIncident()">✔ 승인</button>
+  </div>
+  <div class="card">
+    <div class="step-label">Step 4 — 거절 + 수정 (골드 데이터)</div>
+    <p style="font-size:13px; color:var(--muted); margin-bottom:10px;">AI 추천이 틀렸으면 올바른 액션을 선택 후 거절하세요. 골드 데이터로 저장됩니다.</p>
+    <div class="row" style="margin-bottom:10px;">
+      <select id="reject-action" style="flex:1;">
+        <option value="MONITOR">MONITOR</option>
+        <option value="RESOURCE_CHECK">RESOURCE_CHECK</option>
+        <option value="AGENT_RESTART">AGENT_RESTART</option>
+        <option value="RESCHEDULE">RESCHEDULE</option>
+        <option value="ESCALATE">ESCALATE</option>
+      </select>
+    </div>
+    <input type="text" id="reject-note" placeholder="메모 (선택)" style="margin-bottom:10px;">
+    <button class="btn-red" onclick="rejectIncident()">✘ 거절 (골드 저장)</button>
+  </div>
+</div>
+
+<!-- STEP 5 -->
+<div class="card">
+  <div class="step-label">Step 5 — 데이터 현황</div>
+  <div class="stat-grid" id="stats-grid">
+    <div class="stat-card"><div class="stat-value" id="st-total">—</div><div class="stat-label">총 인시던트</div></div>
+    <div class="stat-card"><div class="stat-value" id="st-scn">—</div><div class="stat-label">시나리오 수</div></div>
+    <div class="stat-card"><div class="stat-value" id="st-gold">—</div><div class="stat-label">골드 데이터</div></div>
+    <div class="stat-card"><div class="stat-value" id="st-ratio">—</div><div class="stat-label">골드 비율</div></div>
+    <div class="stat-card"><div class="stat-value" id="st-rate">—</div><div class="stat-label">최근 일치율</div></div>
+  </div>
+</div>
+
+<!-- STEP 6 -->
+<div class="card">
+  <div class="step-label">Step 6 — 자동 처리 시뮬레이션</div>
+  <div class="row" style="align-items:center; margin-bottom:12px;">
+    <label style="font-size:13px;">신뢰도 임계값</label>
+    <input type="number" id="threshold" value="85" min="0" max="100" style="width:80px;">
+    <span style="font-size:13px; color:var(--muted);">% 이상이면 자동 처리</span>
+    <button class="btn-primary" onclick="runAutoDemo()">자동 처리 실행 ▶</button>
+  </div>
+  <div id="auto-result"></div>
+</div>
+
+<!-- Recent incidents table -->
+<div class="card">
+  <div class="step-label">최근 인시던트</div>
+  <table>
+    <thead><tr><th>ID</th><th>추천 액션</th><th>신뢰도</th><th>상태</th><th>시각</th></tr></thead>
+    <tbody id="inc-table-body"></tbody>
+  </table>
+</div>
+
+</main>
+
+<script>
+const ACTIONS = ['MONITOR','RESOURCE_CHECK','AGENT_RESTART','RESCHEDULE','ESCALATE'];
+const ACTION_COLORS = {
+  MONITOR:'badge-blue', RESOURCE_CHECK:'badge-yellow',
+  AGENT_RESTART:'badge-green', RESCHEDULE:'badge-purple', ESCALATE:'badge-red'
+};
+let currentIncidentId = null;
+
+document.getElementById('sample-select').onchange = function() {
+  if (this.value) document.getElementById('log-input').value = this.value;
+};
+
+async function analyzeLog() {
+  const log = document.getElementById('log-input').value.trim();
+  if (!log) return alert('로그를 입력하세요.');
+  const content = document.getElementById('analysis-content');
+  content.innerHTML = '<span class="loading">분석 중...</span>';
+  document.getElementById('action-area').style.display = 'none';
+
+  try {
+    const res = await fetch('/api/logs', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({log})
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '오류');
+    currentIncidentId = data.incident_id;
+
+    const conf = data.confidence;
+    const confColor = conf >= 80 ? 'var(--green)' : conf >= 60 ? 'var(--yellow)' : 'var(--red)';
+    const simHtml = (data.similar_cases || []).map((c,i) =>
+      `<div class="similar-item">${i+1}. <span class="badge ${ACTION_COLORS[c.action]||'badge-blue'}">${c.action}</span> (${(c.score*100).toFixed(0)}%) — ${(c.log_text||'').slice(0,80)}</div>`
+    ).join('');
+
+    content.innerHTML = `
+      <div style="display:grid; gap:10px;">
+        <div><span class="step-label" style="display:inline;">Drain3 패턴</span>&nbsp;
+          <code style="font-size:12px; color:var(--muted);">${data.drain_template}</code></div>
+        <div class="row" style="align-items:center;">
+          <span class="step-label" style="display:inline;">추천 액션</span>
+          <span class="badge ${ACTION_COLORS[data.recommended_action]||'badge-blue'}" style="font-size:14px; padding:4px 12px;">${data.recommended_action}</span>
+          <span style="color:var(--muted); font-size:12px;">신뢰도</span>
+          <span class="conf-bar"><span class="conf-fill" style="width:${conf}%; background:${confColor};"></span></span>
+          <strong style="color:${confColor};">${conf}%</strong>
+          <span style="color:var(--muted); font-size:11px;">[${data.backend_used}]</span>
+        </div>
+        <div><span class="step-label" style="display:inline;">근거</span>&nbsp;
+          <span style="font-size:13px; color:var(--muted);">${data.reason}</span></div>
+        <div>
+          <div class="step-label" style="margin-bottom:6px;">유사 사례 top-${(data.similar_cases||[]).length}</div>
+          ${simHtml || '<span style="color:var(--muted);">유사 사례 없음 (초기 상태)</span>'}
+        </div>
+        <div><span style="font-size:12px; color:var(--muted);">인시던트 ID: ${data.incident_id}</span></div>
+      </div>`;
+    document.getElementById('action-area').style.display = 'grid';
+    document.getElementById('reject-action').value = data.recommended_action;
+  } catch(e) {
+    content.innerHTML = `<span class="error-msg">오류: ${e.message}</span>`;
+  }
+}
+
+async function approveIncident() {
+  if (!currentIncidentId) return;
+  const res = await fetch(`/api/incidents/${currentIncidentId}/approve`, {method:'POST'});
+  const data = await res.json();
+  alert(`✔ 승인 완료 (${currentIncidentId})\n학습 데이터로 추가되었습니다.`);
+  document.getElementById('action-area').style.display = 'none';
+  loadStats(); loadRecentIncidents();
+}
+
+async function rejectIncident() {
+  if (!currentIncidentId) return;
+  const action = document.getElementById('reject-action').value;
+  const note = document.getElementById('reject-note').value;
+  const res = await fetch(`/api/incidents/${currentIncidentId}/reject`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({action, note})
+  });
+  const data = await res.json();
+  alert(`✘ 거절 완료 (${currentIncidentId})\n골드 데이터로 저장: ${action}`);
+  document.getElementById('action-area').style.display = 'none';
+  loadStats(); loadRecentIncidents();
+}
+
+async function runAutoDemo() {
+  const threshold = parseInt(document.getElementById('threshold').value);
+  const res = await fetch('/api/demo/auto', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({threshold})
+  });
+  const data = await res.json();
+  document.getElementById('auto-result').innerHTML =
+    `자동 처리 <strong style="color:var(--green);">${data.auto_processed}건</strong> / ` +
+    `보류 <strong style="color:var(--yellow);">${data.held_for_review}건</strong> ` +
+    `(검사 ${data.total_checked}건, 임계값 ${data.threshold}%)`;
+  loadStats(); loadRecentIncidents();
+}
+
+async function loadStats() {
+  try {
+    const data = await fetch('/api/stats').then(r=>r.json());
+    document.getElementById('st-total').textContent = data.total_incidents;
+    document.getElementById('st-scn').textContent = data.total_scenarios;
+    document.getElementById('st-gold').textContent = data.gold_count;
+    document.getElementById('st-ratio').textContent = `${data.gold_ratio}%`;
+    document.getElementById('st-rate').textContent =
+      data.latest_match_rate !== null ? `${data.latest_match_rate}%` : '—';
+  } catch(e) {}
+}
+
+async function loadRecentIncidents() {
+  try {
+    const rows = await fetch('/api/incidents/recent?limit=30').then(r=>r.json());
+    const tbody = document.getElementById('inc-table-body');
+    tbody.innerHTML = rows.map(r => {
+      const statusColor = {APPROVED:'var(--green)', REJECTED:'var(--red)', AUTO:'var(--purple)',
+        WAIT_APPROVAL:'var(--yellow)'}[r.status] || 'var(--muted)';
+      const ts = r.created_at ? new Date(r.created_at).toLocaleTimeString('ko-KR') : '';
+      return `<tr>
+        <td style="font-family:monospace; font-size:11px;">${r.incident_id}</td>
+        <td><span class="badge ${ACTION_COLORS[r.recommended_action]||'badge-blue'}">${r.recommended_action}</span></td>
+        <td>${r.confidence}%</td>
+        <td><span style="color:${statusColor};">${r.status}</span></td>
+        <td style="color:var(--muted);">${ts}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {}
+}
+
+// 폴링
+loadStats(); loadRecentIncidents();
+setInterval(() => { loadStats(); loadRecentIncidents(); }, 3000);
+</script>
+</body>
+</html>

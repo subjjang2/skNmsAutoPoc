@@ -1,0 +1,186 @@
+version: 1
+scenarios:
+  # ── AGENT_RESTART (7) ──────────────────────────────────────────────
+  - id: SCN-001
+    pattern_regex: "nova-compute.*(not responding|service is down|heartbeat missed)"
+    action: AGENT_RESTART
+    difficulty: easy
+    description: "nova-compute 에이전트 응답 없음 → 재시작"
+
+  - id: SCN-002
+    pattern_regex: "(neutron|cinder|glance)-agent.*(timeout|not responding|lost contact)"
+    action: AGENT_RESTART
+    difficulty: easy
+    description: "OpenStack 에이전트 타임아웃 → 재시작"
+
+  - id: SCN-003
+    pattern_regex: "oslo.messaging.*connection (refused|reset|broken)"
+    action: AGENT_RESTART
+    difficulty: medium
+    description: "RPC 연결 끊김 → 에이전트 재시작으로 재연결"
+
+  - id: SCN-004
+    pattern_regex: "(?i)(service|process) (crash|died|exited unexpectedly|killed)"
+    action: AGENT_RESTART
+    difficulty: easy
+    description: "서비스 비정상 종료 → 재시작"
+
+  - id: SCN-005
+    pattern_regex: "nova.compute.*Failed to connect to hypervisor"
+    action: AGENT_RESTART
+    difficulty: hard
+    description: "하이퍼바이저 연결 실패 — 에이전트 또는 libvirt 재시작 검토"
+
+  - id: SCN-006
+    pattern_regex: "libvirt.*connection refused|virsh.*connection failed"
+    action: AGENT_RESTART
+    difficulty: hard
+    description: "libvirt 데몬 연결 실패 → nova-compute 재시작"
+
+  - id: SCN-007
+    pattern_regex: "keystone.*token (validation|revocation) service.*unavailable"
+    action: AGENT_RESTART
+    difficulty: hard
+    description: "Keystone 토큰 서비스 불가 → 인증 에이전트 재시작"
+
+  # ── RESOURCE_CHECK (6) ─────────────────────────────────────────────
+  - id: SCN-008
+    pattern_regex: "No valid host was found.*(not enough|insufficient) (RAM|memory|disk|vcpu)"
+    action: RESOURCE_CHECK
+    difficulty: medium
+    description: "스케줄러 자원 부족 → 자원 점검"
+
+  - id: SCN-009
+    pattern_regex: "Disk (usage|space).*(9[0-9]%|100%|full)|No space left on device"
+    action: RESOURCE_CHECK
+    difficulty: easy
+    description: "디스크 포화 → 자원 점검"
+
+  - id: SCN-010
+    pattern_regex: "memory (pressure|exhausted|oom|out.of.memory)"
+    action: RESOURCE_CHECK
+    difficulty: medium
+    description: "메모리 부족 → 자원 점검"
+
+  - id: SCN-011
+    pattern_regex: "cpu.*(throttling|limit reached|usage.*100%)|load average.*(1[5-9]|[2-9][0-9])\\.\\d+"
+    action: RESOURCE_CHECK
+    difficulty: medium
+    description: "CPU 과부하 → 자원 점검"
+
+  - id: SCN-012
+    pattern_regex: "nova.scheduler.*ComputeFilter.*failed|nova.scheduler.*insufficient resources"
+    action: RESOURCE_CHECK
+    difficulty: hard
+    description: "Nova 스케줄러 필터 실패 — 특정 컴퓨트 자원 분석 필요"
+
+  - id: SCN-013
+    pattern_regex: "cinder.*(volume|quota).*(exceeded|limit)|storage.*capacity.*exceeded"
+    action: RESOURCE_CHECK
+    difficulty: medium
+    description: "Cinder 볼륨 할당량 초과 → 자원 점검"
+
+  # ── RESCHEDULE (5) ─────────────────────────────────────────────────
+  - id: SCN-014
+    pattern_regex: "Failed to schedule.*(instance|vm).*retry|retrying.*schedule"
+    action: RESCHEDULE
+    difficulty: medium
+    description: "인스턴스 스케줄 실패 → 재스케줄"
+
+  - id: SCN-015
+    pattern_regex: "nova.conductor.*rescheduling.*due to"
+    action: RESCHEDULE
+    difficulty: easy
+    description: "Nova conductor 재스케줄 트리거"
+
+  - id: SCN-016
+    pattern_regex: "placement.*(no allocation candidate|insufficient resources.*retry)"
+    action: RESCHEDULE
+    difficulty: hard
+    description: "Placement API 후보 없음 → 조건 완화 후 재스케줄"
+
+  - id: SCN-017
+    pattern_regex: "migrate.*failed.*retrying|live.*migration.*failed.*rescheduling"
+    action: RESCHEDULE
+    difficulty: hard
+    description: "실시간 마이그레이션 실패 → 재스케줄"
+
+  - id: SCN-018
+    pattern_regex: "anti-affinity.*group.*constraint.*failed"
+    action: RESCHEDULE
+    difficulty: hard
+    description: "안티어피니티 제약 충돌 → 다른 컴퓨트로 재스케줄"
+
+  # ── MONITOR (5) ────────────────────────────────────────────────────
+  - id: SCN-019
+    pattern_regex: "(Timeout|timed out) waiting for.*(RPC|reply|response).*\\.\\d+s"
+    action: MONITOR
+    difficulty: easy
+    description: "일시적 RPC 타임아웃 → 추이 모니터링"
+
+  - id: SCN-020
+    pattern_regex: "WARN.*(slow|high latency|degraded).*(network|io|storage)"
+    action: MONITOR
+    difficulty: easy
+    description: "성능 저하 경고 → 모니터링"
+
+  - id: SCN-021
+    pattern_regex: "connection (retrying|retry [0-9]+/[0-9]+).*after.*second"
+    action: MONITOR
+    difficulty: easy
+    description: "연결 재시도 중 — 일시적 흔들림 가능성, 모니터링"
+
+  - id: SCN-022
+    pattern_regex: "neutron.*(port|network).*(flapping|unstable|intermittent)"
+    action: MONITOR
+    difficulty: medium
+    description: "네트워크 포트 불안정 → 모니터링 후 판단"
+
+  - id: SCN-023
+    pattern_regex: "nova.api.*response time.*(high|elevated).*[0-9]{4,}ms"
+    action: MONITOR
+    difficulty: medium
+    description: "API 응답 지연 → 추이 모니터링"
+
+  # ── ESCALATE (7) ───────────────────────────────────────────────────
+  - id: SCN-024
+    pattern_regex: "Authentication (failure|failed|error) .*[3-9] times|Unauthorized.*keystone"
+    action: ESCALATE
+    difficulty: hard
+    description: "인증 반복 실패 → 에스컬레이션 (보안 이슈 가능)"
+
+  - id: SCN-025
+    pattern_regex: "CRITICAL.*database.*(corrupt|unreachable|unavailable)"
+    action: ESCALATE
+    difficulty: hard
+    description: "DB 심각 오류 → 즉시 에스컬레이션"
+
+  - id: SCN-026
+    pattern_regex: "kernel.*(panic|oops|BUG:|WARNING.*hardware)"
+    action: ESCALATE
+    difficulty: hard
+    description: "커널 패닉 / 하드웨어 오류 → 에스컬레이션"
+
+  - id: SCN-027
+    pattern_regex: "security.*violation|intrusion.*(detected|attempt)|unauthorized.*root"
+    action: ESCALATE
+    difficulty: hard
+    description: "보안 위반 감지 → 에스컬레이션"
+
+  - id: SCN-028
+    pattern_regex: "nova.compute.*CRITICAL.*multiple hosts.*(down|unreachable)"
+    action: ESCALATE
+    difficulty: hard
+    description: "다수 컴퓨트 호스트 동시 다운 → 에스컬레이션"
+
+  - id: SCN-029
+    pattern_regex: "data.*(loss|corruption|integrity check failed)"
+    action: ESCALATE
+    difficulty: hard
+    description: "데이터 손실/무결성 오류 → 에스컬레이션"
+
+  - id: SCN-030
+    pattern_regex: "SLA.*breach|incident.*P[12].*sev(erity)?.*[12]"
+    action: ESCALATE
+    difficulty: hard
+    description: "SLA 위반 / P1-P2 인시던트 → 즉시 에스컬레이션"

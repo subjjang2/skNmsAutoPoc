@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI NMS — 학습 곡선</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #c9d1d9; --muted: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --red: #f85149; --yellow: #d29922;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; font-size: 14px; }
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 24px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  header h1 { font-size: 18px; font-weight: 600; }
+  nav a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; }
+  nav a:hover { background: var(--border); }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px; display: grid; gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+  .stat-card { text-align: center; padding: 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
+  .stat-value { font-size: 32px; font-weight: 700; }
+  .stat-label { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  button { cursor: pointer; border: none; border-radius: 6px; padding: 8px 16px; font-size: 13px; font-weight: 600; }
+  button:hover { opacity: .8; }
+  .btn-primary { background: var(--accent); color: #0d1117; }
+  .btn-ghost { background: var(--border); color: var(--text); }
+  input[type=number] { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; font-size: 13px; width: 80px; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .status-pill { font-size: 12px; padding: 3px 10px; border-radius: 12px; border: 1px solid var(--border); color: var(--muted); }
+  .status-pill.running { color: var(--yellow); border-color: var(--yellow); animation: blink 1.5s infinite; }
+  .status-pill.done { color: var(--green); border-color: var(--green); }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.5} }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 12px; }
+  th { text-align: left; color: var(--muted); padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  td { padding: 7px 10px; border-bottom: 1px solid rgba(48,54,61,.5); font-family: monospace; }
+  .lift-positive { color: var(--green); }
+  .lift-negative { color: var(--red); }
+  .section-label { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>AI NMS — 학습 곡선</h1>
+  <nav style="margin-left:auto; display:flex; gap:8px;">
+    <a href="/">← Dashboard</a>
+  </nav>
+</header>
+
+<main>
+
+<!-- 통계 카드 -->
+<div class="card">
+  <div class="section-label">실험 통계</div>
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-value" id="stat-baseline" style="color:var(--muted);">—</div>
+      <div class="stat-label">기준선 (step 0)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="stat-current" style="color:var(--accent);">—</div>
+      <div class="stat-label">최신 일치율</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="stat-lift" style="color:var(--green);">—</div>
+      <div class="stat-label">Δ lift</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="stat-gold" style="color:var(--yellow);">—</div>
+      <div class="stat-label">골드 건수</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="stat-majority" style="color:var(--muted);">35%</div>
+      <div class="stat-label">다수 클래스 기준선</div>
+    </div>
+  </div>
+</div>
+
+<!-- 실험 실행 패널 -->
+<div class="card">
+  <div class="section-label">실험 실행</div>
+  <div class="row" style="margin-bottom:12px;">
+    <button class="btn-primary" onclick="startExperiment()">실험 실행 ▶</button>
+    <button class="btn-ghost" onclick="loadCurve()">새로고침 ↻</button>
+    <span class="status-pill" id="run-status">대기</span>
+    <span style="font-size:12px; color:var(--muted);" id="run-id-label"></span>
+  </div>
+  <div style="font-size:12px; color:var(--muted);">
+    학습 step: 200 → 400 → 800 &nbsp;|&nbsp; 골드 step: 100 → 300 → 600<br>
+    <span style="color:var(--yellow);">주의: build_dataset.py 실행 후 사용하세요</span>
+  </div>
+</div>
+
+<!-- 차트 -->
+<div class="card">
+  <div class="section-label">Match Rate 학습 곡선</div>
+  <canvas id="curve-chart" height="320"></canvas>
+</div>
+
+<!-- 상세 테이블 -->
+<div class="card">
+  <div class="section-label">Step 상세</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Step</th><th>학습(train/gold)</th>
+        <th>일치율</th><th>정답/전체</th>
+        <th>Easy</th><th>Medium</th><th>Hard</th><th>Δ</th>
+      </tr>
+    </thead>
+    <tbody id="step-table"></tbody>
+  </table>
+</div>
+
+</main>
+
+<script>
+let chart = null;
+let pollTimer = null;
+let currentRunId = null;
+
+function buildChart(labels, trainRates, goldRates, baseline, majority) {
+  const ctx = document.getElementById('curve-chart').getContext('2d');
+  if (chart) chart.destroy();
+
+  const trainPoints = trainRates.map((v,i) => v !== null ? v : null);
+  const goldPoints = goldRates.map((v,i) => v !== null ? v : null);
+
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Training only',
+          data: trainPoints,
+          borderColor: '#58a6ff',
+          backgroundColor: 'rgba(88,166,255,.15)',
+          pointBackgroundColor: '#58a6ff',
+          tension: 0.3, fill: false, borderWidth: 2,
+        },
+        {
+          label: 'Gold added',
+          data: goldPoints,
+          borderColor: '#3fb950',
+          backgroundColor: 'rgba(63,185,80,.15)',
+          pointBackgroundColor: '#3fb950',
+          tension: 0.3, fill: false, borderWidth: 2,
+          borderDash: [],
+        },
+        {
+          label: 'Majority-class baseline',
+          data: Array(labels.length).fill(majority),
+          borderColor: '#8b949e',
+          borderDash: [6, 3], borderWidth: 1,
+          pointRadius: 0, fill: false,
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { labels: { color: '#c9d1d9' } },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y}%`
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#8b949e' },
+          grid: { color: '#30363d' },
+          title: { display: true, text: 'train/gold count', color: '#8b949e' }
+        },
+        y: {
+          min: 0, max: 100,
+          ticks: { color: '#8b949e', callback: v => v + '%' },
+          grid: { color: '#30363d' },
+          title: { display: true, text: 'Match Rate (%)', color: '#8b949e' }
+        }
+      }
+    }
+  });
+}
+
+async function loadCurve() {
+  try {
+    const url = currentRunId ? `/api/eval/curve?run_id=${currentRunId}` : '/api/eval/curve';
+    const data = await fetch(url).then(r => r.json());
+    if (!data.points || !data.points.length) {
+      document.getElementById('run-id-label').textContent = '데이터 없음 — 실험 먼저 실행하세요';
+      return;
+    }
+
+    const points = data.points;
+    const majority = data.majority_baseline || 35;
+    currentRunId = data.run_id;
+    document.getElementById('run-id-label').textContent = `run: ${data.run_id}`;
+    document.getElementById('stat-majority').textContent = majority + '%';
+
+    const labels = points.map(p => p.label);
+    const trainRates = points.map(p => p.gold_count === 0 ? p.match_rate : null);
+    const goldRates = points.map(p => p.gold_count > 0 ? p.match_rate : null);
+
+    // fill gaps for display
+    let lastTrain = null;
+    for (let i = 0; i < points.length; i++) {
+      if (points[i].gold_count === 0) lastTrain = points[i].match_rate;
+      else if (goldRates[i] !== null && i > 0 && trainRates[i-1] === null && goldRates[i-1] === null)
+        goldRates[i-1] = lastTrain;
+    }
+
+    buildChart(labels, trainRates, goldRates, null, majority);
+
+    const baseline = points[0]?.match_rate ?? null;
+    const latest = points[points.length - 1]?.match_rate ?? null;
+    const maxGold = Math.max(...points.map(p => p.gold_count));
+
+    document.getElementById('stat-baseline').textContent = baseline !== null ? baseline + '%' : '—';
+    document.getElementById('stat-current').textContent = latest !== null ? latest + '%' : '—';
+    document.getElementById('stat-gold').textContent = maxGold;
+    if (baseline !== null && latest !== null) {
+      const lift = latest - baseline;
+      const el = document.getElementById('stat-lift');
+      el.textContent = (lift >= 0 ? '+' : '') + lift + '%';
+      el.style.color = lift >= 0 ? 'var(--green)' : 'var(--red)';
+    }
+
+    // Step table
+    let prevRate = null;
+    document.getElementById('step-table').innerHTML = points.map(p => {
+      const diff = prevRate !== null ? p.match_rate - prevRate : null;
+      prevRate = p.match_rate;
+      const diffStr = diff !== null
+        ? `<span class="${diff >= 0 ? 'lift-positive' : 'lift-negative'}">${diff >= 0 ? '+' : ''}${diff}%</span>`
+        : '—';
+      const d = p.detail?.difficulty || {};
+      return `<tr>
+        <td>${p.step}</td>
+        <td>${p.label}</td>
+        <td><strong>${p.match_rate}%</strong></td>
+        <td>${p.correct}/${p.total}</td>
+        <td>${d.easy?.rate ?? '—'}%</td>
+        <td>${d.medium?.rate ?? '—'}%</td>
+        <td>${d.hard?.rate ?? '—'}%</td>
+        <td>${diffStr}</td>
+      </tr>`;
+    }).join('');
+
+    // status
+    const statusEl = document.getElementById('run-status');
+    statusEl.className = 'status-pill done';
+    statusEl.textContent = '완료';
+  } catch(e) {
+    console.error('loadCurve error:', e);
+  }
+}
+
+async function startExperiment() {
+  const statusEl = document.getElementById('run-status');
+  statusEl.className = 'status-pill running';
+  statusEl.textContent = '실행 중...';
+
+  try {
+    const res = await fetch('/api/eval/run', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({train_steps: [200, 400, 800], gold_steps: [0, 100, 300, 600]})
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '오류');
+    currentRunId = data.run_id;
+    document.getElementById('run-id-label').textContent = `run: ${data.run_id}`;
+
+    // 5초마다 폴링
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(async () => {
+      await loadCurve();
+      const points = (await fetch(`/api/eval/curve?run_id=${currentRunId}`).then(r=>r.json())).points;
+      if (points && points.length >= 6) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    }, 5000);
+  } catch(e) {
+    statusEl.className = 'status-pill';
+    statusEl.textContent = `오류: ${e.message}`;
+  }
+}
+
+loadCurve();
+</script>
+</body>
+</html>

@@ -1,0 +1,141 @@
+"""학습 곡선 드라이버.
+
+steps: (train_count, gold_count) → reset → upsert → evaluate → eval_results
+run_id 반환. DB에 EvalResult 저장.
+"""
+import json
+import logging
+import pathlib
+import uuid
+from datetime import datetime
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from db.models import EvalResult
+from db.database import AsyncSessionLocal
+from analyzer.llm_client import embed_texts
+from pipeline.vector_store import (
+    upsert_scenario,
+    reset_training_embeddings,
+    create_ivfflat_index,
+)
+from evaluation.evaluator import evaluate
+
+logger = logging.getLogger(__name__)
+
+DATA_DIR = pathlib.Path(__file__).parent.parent / "data" / "openstack"
+
+DEFAULT_STEPS = [
+    (200, 0),
+    (400, 0),
+    (800, 0),
+    (800, 100),
+    (800, 300),
+    (800, 600),
+]
+
+
+def _load_json(path: pathlib.Path) -> list[dict]:
+    if not path.exists():
+        return []
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+async def run_experiment(
+    steps: list[tuple[int, int]] | None = None,
+    run_id: str | None = None,
+) -> str:
+    """학습 곡선 실험 실행. run_id 반환."""
+    if steps is None:
+        steps = DEFAULT_STEPS
+    if run_id is None:
+        run_id = f"RUN-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6]}"
+
+    train_pool = _load_json(DATA_DIR / "train_pool.json")
+    test_set = _load_json(DATA_DIR / "test_set.json")
+
+    if not train_pool or not test_set:
+        raise RuntimeError(
+            "train_pool.json 또는 test_set.json 없음. "
+            "python -m pipeline.build_dataset 먼저 실행하세요."
+        )
+
+    # gold pool: 최대 학습 인덱스 이후 행 (학습 데이터와 겹침 방지)
+    # 데이터 부족 시 전체 train_pool 뒤쪽 사용
+    _max_train = max((tc for tc, _ in steps), default=800)
+    gold_pool = train_pool[_max_train:]
+    if not gold_pool:
+        gold_pool = train_pool  # 소규모 데이터 fallback (메커니즘 데모용)
+    gold_pool = gold_pool[:600]
+
+    logger.info("Experiment %s: %d steps, train_pool=%d, test_set=%d, gold_pool=%d",
+                run_id, len(steps), len(train_pool), len(test_set), len(gold_pool))
+
+    async with AsyncSessionLocal() as db:
+        for step_idx, (train_count, gold_count) in enumerate(steps):
+            logger.info("Step %d: train=%d gold=%d", step_idx, train_count, gold_count)
+
+            # 1) 학습 임베딩 초기화
+            await reset_training_embeddings(db)
+
+            # 2) train_pool 적재
+            train_rows = train_pool[:train_count]
+            if train_rows:
+                train_texts = [r["raw_log"] for r in train_rows]
+                train_vecs = await embed_texts(db, train_texts)
+                for row, vec in zip(train_rows, train_vecs):
+                    await upsert_scenario(
+                        db,
+                        scenario_id=f"{run_id}-TRN-{row['id']}",
+                        vector=vec,
+                        action=row["action"],
+                        log_text=row["raw_log"],
+                        difficulty=row.get("difficulty", "medium"),
+                        is_gold=False,
+                        is_test=False,
+                        source="normal",
+                    )
+
+            # 3) gold 적재
+            gold_rows = gold_pool[:gold_count]
+            if gold_rows:
+                gold_texts = [r["raw_log"] for r in gold_rows]
+                gold_vecs = await embed_texts(db, gold_texts)
+                for row, vec in zip(gold_rows, gold_vecs):
+                    await upsert_scenario(
+                        db,
+                        scenario_id=f"{run_id}-GLD-{row['id']}",
+                        vector=vec,
+                        action=row["action"],
+                        log_text=row["raw_log"],
+                        difficulty=row.get("difficulty", "medium"),
+                        is_gold=True,
+                        is_test=False,
+                        source="gold",
+                    )
+
+            # 4) ivfflat 인덱스 (rows > 1000 시 효과)
+            if train_count + gold_count > 1000:
+                await create_ivfflat_index(db)
+
+            # 5) 평가
+            result = await evaluate(db, test_set)
+
+            # 6) EvalResult 저장
+            db.add(EvalResult(
+                run_id=run_id,
+                step_index=step_idx,
+                training_count=train_count,
+                gold_count=gold_count,
+                match_rate=result["match_rate"],
+                correct=result["correct"],
+                total=result["total"],
+                detail=result["detail"],
+            ))
+            await db.commit()
+            logger.info(
+                "Step %d done: match_rate=%d%% (%d/%d)",
+                step_idx, result["match_rate"], result["correct"], result["total"]
+            )
+
+    logger.info("Experiment %s completed", run_id)
+    return run_id
