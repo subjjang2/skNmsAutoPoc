@@ -122,10 +122,16 @@
       <span>실험 이력</span>
       <button class="btn-primary" style="padding:5px 12px;font-size:12px;" onclick="loadRuns()">새로고침</button>
     </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">
+      <strong>Run ID</strong>: 실험 고유 번호 (클릭 시 상세 그래프) &nbsp;|&nbsp;
+      <strong>완료 Step</strong>: 6단계 중 몇 단계 끝났는지 &nbsp;|&nbsp;
+      <strong>최저/최고%</strong>: 실험 중 가장 낮은/높은 정답률 &nbsp;|&nbsp;
+      <strong>Δ lift</strong>: 첫 단계 대비 마지막 단계 정답률 향상폭
+    </div>
     <table class="runs-table">
       <thead>
         <tr>
-          <th>Run ID</th><th>완료 Step</th><th>최저%</th><th>최고%</th><th>Δ lift</th><th>마지막 업데이트</th><th></th>
+          <th>Run ID</th><th>완료 단계</th><th>최저 정답률</th><th>최고 정답률</th><th>Δ 향상폭</th><th>마지막 업데이트</th><th></th>
         </tr>
       </thead>
       <tbody id="runs-table-body"><tr><td colspan="7" style="color:var(--muted);">로딩 중...</td></tr></tbody>
