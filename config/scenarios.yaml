@@ -214,3 +214,75 @@ scenarios:
     difficulty: hard
     description: "SLA 위반 / P1-P2 인시던트 → 즉시 에스컬레이션"
     log_text: "SLA breach confirmed, incident P1 severity 1 declared, immediate escalation required"
+
+  # ── 신규 10종 (SCN-031~040) — 기존 패턴과 다른 OpenStack 컴포넌트 ──
+
+  - id: SCN-031
+    pattern_regex: "swift.*account.*server.*(unavailable|connection refused)|object.*storage.*unreachable"
+    action: ESCALATE
+    difficulty: hard
+    description: "Swift 오브젝트 스토리지 계정 서버 불가 → 에스컬레이션"
+    log_text: "swift account server unavailable on node storage-01, object storage unreachable, connection refused"
+
+  - id: SCN-032
+    pattern_regex: "neutron.*dhcp.*(agent|lease).*(not responding|failed|timeout)"
+    action: AGENT_RESTART
+    difficulty: medium
+    description: "Neutron DHCP 에이전트 응답 없음 → 재시작"
+    log_text: "neutron dhcp agent not responding on network node, lease allocation failed, dhcp timeout for subnet"
+
+  - id: SCN-033
+    pattern_regex: "ceph.*osd.*(down|out|unavailable)|ceph.*health.*HEALTH_ERR"
+    action: ESCALATE
+    difficulty: hard
+    description: "Ceph OSD 다운 / 클러스터 HEALTH_ERR → 에스컬레이션"
+    log_text: "ceph osd.3 down and out, ceph health status HEALTH_ERR, 2 osds unavailable on storage cluster"
+
+  - id: SCN-034
+    pattern_regex: "heat.*stack.*(create|update).*(timeout|failed|rollback)"
+    action: MONITOR
+    difficulty: medium
+    description: "Heat 스택 생성/업데이트 타임아웃 → 추이 모니터링"
+    log_text: "heat stack create timeout after 1800s, stack update failed initiating rollback on tenant stack"
+
+  - id: SCN-035
+    pattern_regex: "glance.*image.*(corrupt|checksum.*mismatch|integrity.*failed)"
+    action: ESCALATE
+    difficulty: hard
+    description: "Glance 이미지 무결성 오류 → 에스컬레이션"
+    log_text: "glance image corrupt detected, checksum mismatch on image uuid abc123, integrity check failed"
+
+  - id: SCN-036
+    pattern_regex: "ironic.*(node|baremetal).*(provision.*failed|deploy.*error|unreachable)"
+    action: RESCHEDULE
+    difficulty: hard
+    description: "Ironic 베어메탈 프로비저닝 실패 → 다른 노드로 재스케줄"
+    log_text: "ironic node baremetal-07 provision failed, deploy error during PXE boot, node unreachable after IPMI"
+
+  - id: SCN-037
+    pattern_regex: "octavia.*(amphora|loadbalancer).*(health.*fail|unreachable|ERROR)"
+    action: MONITOR
+    difficulty: medium
+    description: "Octavia 로드밸런서 헬스 모니터 이상 → 모니터링"
+    log_text: "octavia amphora health monitor failure, loadbalancer lb-00456 ERROR state, amphora unreachable"
+
+  - id: SCN-038
+    pattern_regex: "magnum.*(cluster|node).*(unreachable|NotReady|failed to join)"
+    action: RESCHEDULE
+    difficulty: hard
+    description: "Magnum 컨테이너 클러스터 노드 이탈 → 재스케줄"
+    log_text: "magnum cluster worker node unreachable, node NotReady status, failed to join kubernetes cluster"
+
+  - id: SCN-039
+    pattern_regex: "nova.*(console|vnc|spice).*(unavailable|connection.*refused|proxy.*error)"
+    action: AGENT_RESTART
+    difficulty: easy
+    description: "Nova 콘솔 프록시 연결 불가 → 프록시 재시작"
+    log_text: "nova vnc console unavailable, novncproxy connection refused on port 6080, console proxy error"
+
+  - id: SCN-040
+    pattern_regex: "designate.*(dns|zone|record).*(sync.*failed|backend.*error|timeout)"
+    action: AGENT_RESTART
+    difficulty: medium
+    description: "Designate DNS 백엔드 동기화 실패 → 에이전트 재시작"
+    log_text: "designate dns zone sync failed, backend error communicating with BIND9, record update timeout"
