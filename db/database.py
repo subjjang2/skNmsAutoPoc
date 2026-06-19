@@ -69,6 +69,7 @@ async def init_db():
         for stmt in [
             "ALTER TABLE llm_settings ADD COLUMN IF NOT EXISTS dgx_embed_model VARCHAR(100) DEFAULT 'Qwen2.5-14B'",
             "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS is_test BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS alt_logs JSONB DEFAULT '[]'",
         ]:
             await conn.execute(text(stmt))
 

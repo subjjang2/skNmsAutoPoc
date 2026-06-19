@@ -35,20 +35,6 @@ _bg_tasks: set[asyncio.Task] = set()
 _drain_call_count = 0
 
 
-async def _migrate_db() -> None:
-    """기존 테이블에 누락된 컬럼을 안전하게 추가 (idempotent)."""
-    migrations = [
-        "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS alt_logs JSONB DEFAULT '[]'",
-    ]
-    async with AsyncSessionLocal() as db:
-        for sql in migrations:
-            try:
-                await db.execute(text(sql))
-            except Exception:
-                pass
-        await db.commit()
-
-
 async def _save_drain_state() -> None:
     from analyzer.drain_miner import get_state_json
     state = get_state_json()
@@ -127,7 +113,6 @@ async def lifespan(app: FastAPI):
     dim = await probe_dim()
     os.environ["EMBED_DIM"] = str(dim)
     await init_db()
-    await _migrate_db()
     await _load_drain_state()
     await _embed_seeded_scenarios()
     await _auto_build_dataset()
