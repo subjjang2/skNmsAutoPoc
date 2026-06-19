@@ -287,8 +287,9 @@ async function loadRuns() {
 
 async function loadScenarios() {
   try {
-    const data = await fetch('/api/scenarios/list').then(r => r.json());
-    const scns = data.scenarios;
+    const resp = await fetch('/api/scenarios/list');
+    const data = await resp.json();
+    const scns = data.scenarios || [];
     const withAlt = scns.filter(s => s.alt_logs && s.alt_logs.length > 0).length;
     document.getElementById('alt-count').textContent = `(${withAlt}/${scns.length}개 완료)`;
     document.getElementById('scn-list').innerHTML = scns.map(s => {
