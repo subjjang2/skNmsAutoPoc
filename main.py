@@ -47,11 +47,50 @@ async def _auto_build_dataset():
         logger.info("데이터셋 자동 빌드 완료")
 
 
+async def _embed_seeded_scenarios():
+    """log_text 있지만 embedding 없는 시드 시나리오를 시작 시 임베딩."""
+    from db.database import AsyncSessionLocal
+    from pipeline.vector_store import upsert_scenario
+    from pipeline.embedder import embed_texts_direct
+
+    async with AsyncSessionLocal() as db:
+        rows = (await db.execute(
+            text("SELECT scenario_id, log_text, action, drain_template, difficulty, is_gold, is_test, source "
+                 "FROM scenarios WHERE log_text != '' AND embedding IS NULL")
+        )).fetchall()
+
+    if not rows:
+        logger.info("임베딩 필요한 시드 시나리오 없음")
+        return
+
+    logger.info("시드 시나리오 %d개 임베딩 시작", len(rows))
+    texts = [r.log_text for r in rows]
+    vecs = await embed_texts_direct(texts)
+
+    async with AsyncSessionLocal() as db:
+        for row, vec in zip(rows, vecs):
+            await upsert_scenario(
+                db,
+                scenario_id=row.scenario_id,
+                vector=vec,
+                action=row.action,
+                log_text=row.log_text,
+                drain_template=row.drain_template or "",
+                difficulty=row.difficulty,
+                is_gold=row.is_gold,
+                is_test=row.is_test,
+                source=row.source,
+            )
+    logger.info("시드 시나리오 임베딩 완료 (%d개)", len(rows))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("Templates dir: %s (exists=%s)", TEMPLATES_DIR, TEMPLATES_DIR.exists())
     dim = await probe_dim()
     os.environ["EMBED_DIM"] = str(dim)
     await init_db()
+    await _embed_seeded_scenarios()
     await _auto_build_dataset()
     yield
     for t in list(_bg_tasks):
@@ -65,7 +104,11 @@ app = FastAPI(title="AI NMS POC", version="0.1.0", lifespan=lifespan)
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    return templates.TemplateResponse("dashboard.html", {"request": request})
+    try:
+        return templates.TemplateResponse("dashboard.html", {"request": request})
+    except Exception as e:
+        logger.error("dashboard 렌더링 실패: %s", e, exc_info=True)
+        raise HTTPException(500, f"템플릿 오류: {e}")
 
 
 @app.get("/accuracy", response_class=HTMLResponse)

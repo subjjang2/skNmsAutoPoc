@@ -99,6 +99,7 @@ async def init_db():
                     session.add(Scenario(
                         scenario_id=s["id"],
                         pattern_regex=s.get("pattern_regex", ""),
+                        log_text=s.get("log_text", ""),
                         action=s["action"],
                         difficulty=s.get("difficulty", "medium"),
                         description=s.get("description", ""),
