@@ -38,6 +38,12 @@
   .badge-nokey { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(248,81,73,.15); color: var(--red); border: 1px solid var(--red); }
   .row { display: flex; gap: 10px; align-items: center; }
   hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+  .drain-row { display: flex; gap: 10px; align-items: baseline; padding: 7px 0; border-bottom: 1px solid rgba(48,54,61,.4); font-size: 12px; }
+  .drain-row:last-child { border-bottom: none; }
+  .drain-id { color: var(--muted); font-family: monospace; min-width: 36px; }
+  .drain-template { font-family: monospace; color: var(--accent); flex: 1; word-break: break-all; }
+  .drain-size { color: var(--muted); font-family: monospace; min-width: 40px; text-align: right; }
+  #drain-list { max-height: 400px; overflow-y: auto; margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -104,9 +110,38 @@
       <div class="status-msg" id="status-msg"></div>
     </div>
   </div>
+  <!-- Drain3 패턴 뷰어 -->
+  <div class="card">
+    <div class="section-label" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Drain3 학습 패턴 <span id="drain-count" style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;"></span></span>
+      <button class="btn-primary" style="padding:5px 12px;font-size:12px;" onclick="loadDrain()">새로고침</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">로그 분석 시마다 누적. 재시작하면 초기화됨(인메모리). #ID | 템플릿 | 건수</div>
+    <div id="drain-list"><span style="color:var(--muted);font-size:12px;">로딩 중...</span></div>
+  </div>
 </main>
 
 <script>
+async function loadDrain() {
+  try {
+    const data = await fetch('/api/drain/clusters').then(r => r.json());
+    document.getElementById('drain-count').textContent = `(${data.count}개)`;
+    if (!data.clusters.length) {
+      document.getElementById('drain-list').innerHTML = '<span style="color:var(--muted);font-size:12px;">아직 없음 — 로그 분석 후 생성됨</span>';
+      return;
+    }
+    document.getElementById('drain-list').innerHTML = data.clusters.map(c =>
+      `<div class="drain-row">
+        <span class="drain-id">#${c.cluster_id}</span>
+        <span class="drain-template">${c.template}</span>
+        <span class="drain-size">${c.size}건</span>
+      </div>`
+    ).join('');
+  } catch(e) {
+    document.getElementById('drain-list').innerHTML = `<span style="color:var(--red);">오류: ${e.message}</span>`;
+  }
+}
+
 async function loadSettings() {
   try {
     const data = await fetch('/api/admin/settings').then(r => r.json());
@@ -160,6 +195,7 @@ async function saveSettings() {
 }
 
 loadSettings();
+loadDrain();
 </script>
 </body>
 </html>

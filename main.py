@@ -317,6 +317,23 @@ async def reject_incident(incident_id: str, req: RejectRequest, db: AsyncSession
     return {"status": "rejected", "gold_action": req.action, "incident_id": incident_id}
 
 
+# ── Drain3 clusters ──────────────────────────────────────────────────
+
+@app.get("/api/drain/clusters")
+async def drain_clusters():
+    from analyzer.drain_miner import _get_miner
+    miner = _get_miner()
+    clusters = []
+    for cid, cluster in miner.drain.id_to_cluster.items():
+        clusters.append({
+            "cluster_id": cid,
+            "template": " ".join(cluster.log_template_tokens),
+            "size": cluster.size,
+        })
+    clusters.sort(key=lambda c: c["size"], reverse=True)
+    return {"count": len(clusters), "clusters": clusters}
+
+
 # ── Stats ────────────────────────────────────────────────────────────
 
 @app.get("/api/stats")
