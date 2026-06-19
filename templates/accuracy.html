@@ -132,13 +132,25 @@
 
 <!-- 상세 테이블 -->
 <div class="card">
-  <div class="section-label">Step 상세</div>
+  <div class="section-label">Step별 채점 결과 <span id="table-run-label" style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px;"></span></div>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">
+    <strong>단계</strong>: 실험 순번 &nbsp;|&nbsp;
+    <strong>참고 사례 수</strong>: 일반/골드 &nbsp;|&nbsp;
+    <strong>정답률</strong>: AI가 맞힌 비율 &nbsp;|&nbsp;
+    <strong>난이도별</strong>: Easy·Medium·Hard 정답률 &nbsp;|&nbsp;
+    <strong>Δ</strong>: 이전 단계 대비 정답률 변화
+  </div>
   <table>
     <thead>
       <tr>
-        <th>Step</th><th>학습(train/gold)</th>
-        <th>일치율</th><th>정답/전체</th>
-        <th>Easy</th><th>Medium</th><th>Hard</th><th>Δ</th>
+        <th>단계</th>
+        <th>참고 사례 수<br><span style="font-weight:400;font-size:10px;color:var(--muted);">일반/골드</span></th>
+        <th>정답률</th>
+        <th>정답/전체</th>
+        <th>Easy<br><span style="font-weight:400;font-size:10px;color:var(--muted);">쉬운 문제</span></th>
+        <th>Medium<br><span style="font-weight:400;font-size:10px;color:var(--muted);">보통</span></th>
+        <th>Hard<br><span style="font-weight:400;font-size:10px;color:var(--muted);">어려운 문제</span></th>
+        <th>Δ 변화</th>
       </tr>
     </thead>
     <tbody id="step-table"></tbody>
@@ -245,6 +257,7 @@ async function loadCurve() {
     const majority = data.majority_baseline || 35;
     currentRunId = data.run_id;
     document.getElementById('run-id-label').textContent = `run: ${data.run_id}`;
+    document.getElementById('table-run-label').textContent = `— 실험 ID: ${data.run_id}`;
     document.getElementById('stat-majority').textContent = majority + '%';
 
     const labels = points.map(p => p.label);
