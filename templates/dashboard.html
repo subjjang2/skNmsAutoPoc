@@ -112,11 +112,11 @@
     <p style="font-size:13px; color:var(--muted); margin-bottom:10px;">AI 추천이 틀렸으면 올바른 액션을 선택 후 거절하세요. 골드 데이터로 저장됩니다.</p>
     <div class="row" style="margin-bottom:10px;">
       <select id="reject-action" style="flex:1;">
-        <option value="MONITOR">MONITOR</option>
-        <option value="RESOURCE_CHECK">RESOURCE_CHECK</option>
-        <option value="AGENT_RESTART">AGENT_RESTART</option>
-        <option value="RESCHEDULE">RESCHEDULE</option>
-        <option value="ESCALATE">ESCALATE</option>
+        <option value="MONITOR">MONITOR — 모니터링 유지 (지켜보기)</option>
+        <option value="RESOURCE_CHECK">RESOURCE_CHECK — 자원 점검 (CPU/메모리/디스크)</option>
+        <option value="AGENT_RESTART">AGENT_RESTART — 에이전트 재시작</option>
+        <option value="RESCHEDULE">RESCHEDULE — 인스턴스 재스케줄</option>
+        <option value="ESCALATE">ESCALATE — 상위 에스컬레이션 (즉시 대응)</option>
       </select>
     </div>
     <input type="text" id="reject-note" placeholder="메모 (선택)" style="margin-bottom:10px;">
