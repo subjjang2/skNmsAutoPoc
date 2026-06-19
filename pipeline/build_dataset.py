@@ -45,6 +45,26 @@ def _label_lines(lines: list[str], patterns: list[dict]) -> list[dict]:
     return labeled
 
 
+def _synthetic_rows_from_scenarios(patterns: list[dict], n_per: int = 30) -> list[dict]:
+    """scenarios.yaml log_text augmentation → 합성 라벨 데이터. CSV 매치 0건일 때 폴백."""
+    rows = []
+    for s in patterns:
+        base = s.get("log_text", "")
+        if not base:
+            continue
+        for _ in range(n_per):
+            line = re.sub(r'compute-\d+', f'compute-{random.randint(1, 20):02d}', base)
+            line = re.sub(r'\b(\d+)s\b', lambda m: f'{random.randint(10, 120)}s', line)
+            line = re.sub(r'\b9\d%', f'{random.randint(90, 99)}%', line)
+            rows.append({
+                "raw_log": line,
+                "action": s["action"],
+                "difficulty": s["difficulty"],
+                "scenario_id": s["id"],
+            })
+    return rows
+
+
 def _split(labeled: list[dict], test_size: int, seed: int = 42) -> tuple[list[dict], list[dict]]:
     random.seed(seed)
     shuffled = labeled.copy()
@@ -82,6 +102,10 @@ def build(test_size: int = 1000) -> dict:
     labeled = _label_lines(lines, patterns)
     print(f"Matched {len(labeled)} / {len(lines)} lines "
           f"({len(labeled)/len(lines)*100:.1f}% coverage)")
+
+    synthetic = _synthetic_rows_from_scenarios(patterns, n_per=30)
+    print(f"Synthetic rows from log_text augmentation: {len(synthetic)}")
+    labeled = labeled + synthetic
 
     if len(labeled) < test_size + 100:
         print(f"WARNING: only {len(labeled)} labeled rows, test_size clamped", file=sys.stderr)
