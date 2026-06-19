@@ -458,6 +458,35 @@ async def eval_curve(run_id: str | None = None, db: AsyncSession = Depends(get_d
     }
 
 
+@app.get("/api/eval/runs")
+async def eval_runs(db: AsyncSession = Depends(get_db)):
+    rows = (await db.execute(
+        text("""
+            SELECT run_id,
+                   COUNT(*) AS steps_done,
+                   MIN(match_rate) AS min_rate,
+                   MAX(match_rate) AS max_rate,
+                   MAX(match_rate) - MIN(match_rate) AS lift,
+                   MAX(created_at) AS last_updated
+            FROM eval_results
+            GROUP BY run_id
+            ORDER BY MAX(created_at) DESC
+            LIMIT 20
+        """)
+    )).fetchall()
+    return {"runs": [
+        {
+            "run_id": r.run_id,
+            "steps_done": r.steps_done,
+            "min_rate": r.min_rate,
+            "max_rate": r.max_rate,
+            "lift": r.lift,
+            "last_updated": r.last_updated.isoformat() if r.last_updated else None,
+        }
+        for r in rows
+    ]}
+
+
 # ── Demo auto ────────────────────────────────────────────────────────
 
 @app.post("/api/demo/auto")

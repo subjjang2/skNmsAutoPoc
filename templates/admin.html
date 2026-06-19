@@ -44,6 +44,12 @@
   .drain-template { font-family: monospace; color: var(--accent); flex: 1; word-break: break-all; }
   .drain-size { color: var(--muted); font-family: monospace; min-width: 40px; text-align: right; }
   #drain-list { max-height: 400px; overflow-y: auto; margin-top: 10px; }
+  table.runs-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+  table.runs-table th { text-align: left; color: var(--muted); padding: 6px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  table.runs-table td { padding: 7px 10px; border-bottom: 1px solid rgba(48,54,61,.4); font-family: monospace; }
+  table.runs-table tr:hover td { background: rgba(255,255,255,.03); }
+  .run-link { color: var(--accent); text-decoration: none; cursor: pointer; }
+  .run-link:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -110,6 +116,22 @@
       <div class="status-msg" id="status-msg"></div>
     </div>
   </div>
+  <!-- 실험 이력 -->
+  <div class="card">
+    <div class="section-label" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>실험 이력</span>
+      <button class="btn-primary" style="padding:5px 12px;font-size:12px;" onclick="loadRuns()">새로고침</button>
+    </div>
+    <table class="runs-table">
+      <thead>
+        <tr>
+          <th>Run ID</th><th>완료 Step</th><th>최저%</th><th>최고%</th><th>Δ lift</th><th>마지막 업데이트</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="runs-table-body"><tr><td colspan="7" style="color:var(--muted);">로딩 중...</td></tr></tbody>
+    </table>
+  </div>
+
   <!-- Drain3 패턴 뷰어 -->
   <div class="card">
     <div class="section-label" style="display:flex;justify-content:space-between;align-items:center;">
@@ -194,8 +216,35 @@ async function saveSettings() {
   }
 }
 
+async function loadRuns() {
+  try {
+    const data = await fetch('/api/eval/runs').then(r => r.json());
+    const tbody = document.getElementById('runs-table-body');
+    if (!data.runs.length) {
+      tbody.innerHTML = '<tr><td colspan="7" style="color:var(--muted);">실험 기록 없음</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.runs.map(r => {
+      const lift = r.lift >= 0 ? `<span style="color:var(--green);">+${r.lift}%</span>` : `<span style="color:var(--red);">${r.lift}%</span>`;
+      const updated = r.last_updated ? r.last_updated.replace('T', ' ').slice(0, 19) : '-';
+      return `<tr>
+        <td><a class="run-link" href="/accuracy?run_id=${r.run_id}" target="_blank">${r.run_id}</a></td>
+        <td>${r.steps_done}/6</td>
+        <td>${r.min_rate}%</td>
+        <td><strong>${r.max_rate}%</strong></td>
+        <td>${lift}</td>
+        <td>${updated}</td>
+        <td><a class="run-link" href="/api/eval/curve?run_id=${r.run_id}" target="_blank">JSON</a></td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    document.getElementById('runs-table-body').innerHTML = `<tr><td colspan="7" style="color:var(--red);">오류: ${e.message}</td></tr>`;
+  }
+}
+
 loadSettings();
 loadDrain();
+loadRuns();
 </script>
 </body>
 </html>
