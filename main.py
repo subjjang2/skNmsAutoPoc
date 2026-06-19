@@ -105,7 +105,7 @@ app = FastAPI(title="AI NMS POC", version="0.1.0", lifespan=lifespan)
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     try:
-        return templates.TemplateResponse("dashboard.html", {"request": request})
+        return templates.TemplateResponse(request, "dashboard.html")
     except Exception as e:
         logger.error("dashboard 렌더링 실패: %s", e, exc_info=True)
         raise HTTPException(500, f"템플릿 오류: {e}")
@@ -113,12 +113,12 @@ async def dashboard(request: Request):
 
 @app.get("/accuracy", response_class=HTMLResponse)
 async def accuracy(request: Request):
-    return templates.TemplateResponse("accuracy.html", {"request": request})
+    return templates.TemplateResponse(request, "accuracy.html")
 
 
 @app.get("/admin", response_class=HTMLResponse)
 async def admin(request: Request):
-    return templates.TemplateResponse("admin.html", {"request": request})
+    return templates.TemplateResponse(request, "admin.html")
 
 
 @app.get("/health")
