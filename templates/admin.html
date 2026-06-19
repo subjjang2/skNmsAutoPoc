@@ -50,6 +50,27 @@
   table.runs-table tr:hover td { background: rgba(255,255,255,.03); }
   .run-link { color: var(--accent); text-decoration: none; cursor: pointer; }
   .run-link:hover { text-decoration: underline; }
+  .scn-item { border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; overflow: hidden; }
+  .scn-header { display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; background: rgba(255,255,255,.02); user-select: none; }
+  .scn-header:hover { background: rgba(255,255,255,.04); }
+  .scn-id { font-family: monospace; font-size: 11px; color: var(--muted); min-width: 60px; }
+  .scn-action { font-size: 11px; padding: 2px 7px; border-radius: 4px; font-weight: 600; }
+  .action-AGENT_RESTART { background: rgba(88,166,255,.15); color: #58a6ff; }
+  .action-RESOURCE_CHECK { background: rgba(210,153,34,.15); color: #d29922; }
+  .action-RESCHEDULE { background: rgba(63,185,80,.15); color: #3fb950; }
+  .action-MONITOR { background: rgba(139,148,158,.15); color: #8b949e; }
+  .action-ESCALATE { background: rgba(248,81,73,.15); color: #f85149; }
+  .scn-desc { font-size: 12px; flex: 1; }
+  .alt-badge { font-size: 11px; color: var(--muted); margin-left: auto; }
+  .alt-badge.has-alt { color: var(--green); }
+  .scn-body { display: none; padding: 12px; border-top: 1px solid var(--border); background: var(--bg); }
+  .scn-body.open { display: block; }
+  .scn-body label { font-size: 11px; color: var(--muted); display: block; margin-bottom: 4px; }
+  .scn-body .log-original { font-family: monospace; font-size: 11px; color: var(--accent); background: rgba(88,166,255,.06); padding: 6px 10px; border-radius: 4px; margin-bottom: 10px; word-break: break-all; }
+  .scn-body textarea { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 12px; font-family: monospace; resize: vertical; min-height: 80px; }
+  .scn-actions { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+  .scn-msg { font-size: 11px; margin-left: 8px; }
 </style>
 </head>
 <body>
@@ -136,6 +157,22 @@
       </thead>
       <tbody id="runs-table-body"><tr><td colspan="7" style="color:var(--muted);">로딩 중...</td></tr></tbody>
     </table>
+  </div>
+
+  <!-- 시나리오 alt_logs 에디터 -->
+  <div class="card">
+    <div class="section-label" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>시나리오 표현 다양화 <span id="alt-count" style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;"></span></span>
+      <div style="display:flex;gap:6px;">
+        <button class="btn-primary" style="padding:5px 12px;font-size:12px;" onclick="generateAllAlt()" id="gen-all-btn">AI 전체 생성</button>
+        <button class="btn-primary" style="padding:5px 12px;font-size:12px;background:var(--border);color:var(--text);" onclick="loadScenarios()">새로고침</button>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">
+      시나리오당 표현이 다른 로그 문장 3~5개 → 실험 정확도가 진짜 의미를 가짐.<br>
+      <strong>AI 생성</strong>: LLM이 초안 작성 (검토 후 저장 권장) &nbsp;|&nbsp; <strong>저장</strong>: DB에 반영 → 다음 실험부터 적용
+    </div>
+    <div id="scn-list"><span style="color:var(--muted);font-size:12px;">로딩 중...</span></div>
   </div>
 
   <!-- Drain3 패턴 뷰어 -->
@@ -248,9 +285,107 @@ async function loadRuns() {
   }
 }
 
+async function loadScenarios() {
+  try {
+    const data = await fetch('/api/scenarios/list').then(r => r.json());
+    const scns = data.scenarios;
+    const withAlt = scns.filter(s => s.alt_logs && s.alt_logs.length > 0).length;
+    document.getElementById('alt-count').textContent = `(${withAlt}/${scns.length}개 완료)`;
+    document.getElementById('scn-list').innerHTML = scns.map(s => {
+      const altText = (s.alt_logs || []).join('\n');
+      const hasAlt = s.alt_logs && s.alt_logs.length > 0;
+      return `<div class="scn-item" id="scn-${s.scenario_id}">
+        <div class="scn-header" onclick="toggleScn('${s.scenario_id}')">
+          <span class="scn-id">${s.scenario_id}</span>
+          <span class="scn-action action-${s.action}">${s.action}</span>
+          <span class="scn-desc">${s.description}</span>
+          <span class="alt-badge ${hasAlt ? 'has-alt' : ''}">${hasAlt ? s.alt_logs.length+'개 ✔' : '없음'}</span>
+        </div>
+        <div class="scn-body" id="body-${s.scenario_id}">
+          <label>원본 log_text (train용)</label>
+          <div class="log-original">${s.log_text}</div>
+          <label>alt_logs — 줄바꿈으로 구분 (test용, 표현이 다른 문장)</label>
+          <textarea id="alt-${s.scenario_id}" rows="4">${altText}</textarea>
+          <div class="scn-actions">
+            <button class="btn-primary btn-sm" onclick="saveAlt('${s.scenario_id}')">저장</button>
+            <button class="btn-primary btn-sm" style="background:var(--border);color:var(--text);" onclick="genAlt('${s.scenario_id}')">AI 생성</button>
+            <span class="scn-msg" id="msg-${s.scenario_id}"></span>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    document.getElementById('scn-list').innerHTML = `<span style="color:var(--red);">오류: ${e.message}</span>`;
+  }
+}
+
+function toggleScn(id) {
+  const body = document.getElementById('body-' + id);
+  body.classList.toggle('open');
+}
+
+async function saveAlt(id) {
+  const raw = document.getElementById('alt-' + id).value;
+  const alt_logs = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  const msg = document.getElementById('msg-' + id);
+  try {
+    msg.innerHTML = '저장 중...';
+    await fetch(`/api/scenarios/${id}/alt_logs`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({alt_logs}),
+    });
+    msg.innerHTML = '<span style="color:var(--green);">✔ 저장됨</span>';
+    await loadScenarios();
+    document.getElementById('body-' + id).classList.add('open');
+  } catch(e) {
+    msg.innerHTML = `<span style="color:var(--red);">${e.message}</span>`;
+  }
+}
+
+async function genAlt(id) {
+  const msg = document.getElementById('msg-' + id);
+  try {
+    msg.innerHTML = 'AI 생성 중...';
+    const data = await fetch(`/api/scenarios/${id}/generate_alt_logs`, {method:'POST'}).then(r => r.json());
+    document.getElementById('alt-' + id).value = (data.alt_logs || []).join('\n');
+    msg.innerHTML = '<span style="color:var(--yellow);">초안 생성됨 — 검토 후 저장하세요</span>';
+  } catch(e) {
+    msg.innerHTML = `<span style="color:var(--red);">${e.message}</span>`;
+  }
+}
+
+async function generateAllAlt() {
+  const btn = document.getElementById('gen-all-btn');
+  btn.disabled = true;
+  btn.textContent = '생성 중...';
+  try {
+    const data = await fetch('/api/scenarios/list').then(r => r.json());
+    const scns = data.scenarios.filter(s => !s.alt_logs || s.alt_logs.length === 0);
+    for (const s of scns) {
+      try {
+        const res = await fetch(`/api/scenarios/${s.scenario_id}/generate_alt_logs`, {method:'POST'}).then(r => r.json());
+        await fetch(`/api/scenarios/${s.scenario_id}/alt_logs`, {
+          method: 'PUT',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({alt_logs: res.alt_logs || []}),
+        });
+        btn.textContent = `생성 중... (${s.scenario_id})`;
+      } catch(e) { /* 개별 실패 무시 */ }
+    }
+    await loadScenarios();
+    btn.textContent = '완료!';
+    setTimeout(() => { btn.textContent = 'AI 전체 생성'; btn.disabled = false; }, 2000);
+  } catch(e) {
+    btn.textContent = 'AI 전체 생성'; btn.disabled = false;
+    alert('오류: ' + e.message);
+  }
+}
+
 loadSettings();
 loadDrain();
 loadRuns();
+loadScenarios();
 </script>
 </body>
 </html>

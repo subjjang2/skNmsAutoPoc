@@ -38,6 +38,7 @@ class Scenario(Base):
     source = Column(String(10), default="normal")   # normal|gold
     is_test = Column(Boolean, default=False)        # True → pgvector 검색 제외
     embedding = Column(Vector(_EMBED_DIM), nullable=True)
+    alt_logs = Column(JSON, default=list)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

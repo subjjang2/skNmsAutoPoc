@@ -513,6 +513,79 @@ async def demo_auto(req: AutoDemoRequest, db: AsyncSession = Depends(get_db)):
     }
 
 
+# ── Scenarios ────────────────────────────────────────────────────────
+
+@app.get("/api/scenarios/list")
+async def list_scenarios(db: AsyncSession = Depends(get_db)):
+    rows = (await db.execute(
+        select(Scenario)
+        .where(Scenario.source == "normal", Scenario.is_gold == False, Scenario.is_test == False)
+        .where(Scenario.scenario_id.like("SCN-%"))
+        .order_by(Scenario.scenario_id)
+    )).scalars().all()
+    return {"scenarios": [
+        {
+            "scenario_id": s.scenario_id,
+            "action": s.action,
+            "difficulty": s.difficulty,
+            "description": s.description,
+            "log_text": s.log_text,
+            "alt_logs": s.alt_logs or [],
+        }
+        for s in rows
+    ]}
+
+
+class AltLogsRequest(BaseModel):
+    alt_logs: list[str]
+
+
+@app.put("/api/scenarios/{scenario_id}/alt_logs")
+async def update_alt_logs(scenario_id: str, req: AltLogsRequest, db: AsyncSession = Depends(get_db)):
+    row = (await db.execute(
+        select(Scenario).where(Scenario.scenario_id == scenario_id)
+    )).scalar_one_or_none()
+    if not row:
+        raise HTTPException(404, f"scenario {scenario_id} not found")
+    cleaned = [l.strip() for l in req.alt_logs if l.strip()]
+    row.alt_logs = cleaned
+    await db.commit()
+    return {"scenario_id": scenario_id, "alt_logs": cleaned}
+
+
+@app.post("/api/scenarios/{scenario_id}/generate_alt_logs")
+async def generate_alt_logs(scenario_id: str, db: AsyncSession = Depends(get_db)):
+    row = (await db.execute(
+        select(Scenario).where(Scenario.scenario_id == scenario_id)
+    )).scalar_one_or_none()
+    if not row:
+        raise HTTPException(404, f"scenario {scenario_id} not found")
+
+    from analyzer.llm_client import analyze
+    system = "You are an OpenStack log generator. Output JSON array only, no explanation."
+    prompt = (
+        f"OpenStack NMS log scenario: {row.description}\n"
+        f"Action: {row.action}\n"
+        f"Example log: {row.log_text}\n\n"
+        f"Generate 4 English log messages with the same meaning but different wording.\n"
+        f"Output JSON array only. Example: [\"log1\", \"log2\", \"log3\", \"log4\"]"
+    )
+    raw, _ = await analyze(db, system, prompt)
+    import re as _re
+    m = _re.search(r'\[.*?\]', raw, _re.DOTALL)
+    if not m:
+        raise HTTPException(500, f"LLM 파싱 실패: {raw[:200]}")
+    try:
+        alt = json.loads(m.group())
+        alt = [str(x).strip() for x in alt if str(x).strip()][:5]
+    except Exception:
+        raise HTTPException(500, f"JSON 파싱 실패: {raw[:200]}")
+
+    row.alt_logs = alt
+    await db.commit()
+    return {"scenario_id": scenario_id, "alt_logs": alt}
+
+
 # ── Admin settings ───────────────────────────────────────────────────
 
 @app.get("/api/admin/settings")

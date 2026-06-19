@@ -40,6 +40,29 @@ def _load_json(path: pathlib.Path) -> list[dict]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+async def _build_alt_test_set() -> list[dict]:
+    """DB에서 alt_logs 있는 시나리오 → test set 구성."""
+    from sqlalchemy import text as sa_text
+    async with AsyncSessionLocal() as db:
+        rows = (await db.execute(sa_text(
+            "SELECT scenario_id, action, difficulty, alt_logs "
+            "FROM scenarios WHERE scenario_id LIKE 'SCN-%' AND alt_logs IS NOT NULL"
+        ))).fetchall()
+    result = []
+    for r in rows:
+        alt = r.alt_logs if isinstance(r.alt_logs, list) else json.loads(r.alt_logs or "[]")
+        for log in alt:
+            if log and log.strip():
+                result.append({
+                    "id": f"ALT-{r.scenario_id}-{len(result):03d}",
+                    "raw_log": log.strip(),
+                    "action": r.action,
+                    "difficulty": r.difficulty or "medium",
+                    "scenario_id": r.scenario_id,
+                })
+    return result
+
+
 async def run_experiment(
     steps: list[tuple[int, int]] | None = None,
     run_id: str | None = None,
@@ -51,7 +74,15 @@ async def run_experiment(
         run_id = f"RUN-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6]}"
 
     train_pool = _load_json(DATA_DIR / "train_pool.json")
-    test_set = _load_json(DATA_DIR / "test_set.json")
+
+    # alt_logs가 충분히 있으면 DB에서 test_set 구성 (data leakage 방지)
+    alt_test_set = await _build_alt_test_set()
+    if len(alt_test_set) >= 30:
+        test_set = alt_test_set
+        logger.info("alt_logs test_set 사용: %d건 (data leakage 없음)", len(test_set))
+    else:
+        test_set = _load_json(DATA_DIR / "test_set.json")
+        logger.info("test_set.json 사용: %d건", len(test_set))
 
     if not train_pool or not test_set:
         raise RuntimeError(
