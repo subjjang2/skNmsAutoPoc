@@ -94,3 +94,12 @@ class Counter(Base):
 
     name = Column(String(40), primary_key=True)
     value = Column(Integer, default=0)
+
+
+class KeyValue(Base):
+    """범용 키-값 저장소 (Drain3 상태 등)."""
+    __tablename__ = "key_value"
+
+    key = Column(String(100), primary_key=True)
+    value = Column(Text, default="")
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.database import get_db, init_db
+from db.database import get_db, init_db, AsyncSessionLocal
 from db.models import Incident, Scenario, GoldData, EvalResult, LLMSettings
 from history.seq import next_seq_id
 from analyzer.drain_miner import add_log as drain_add
@@ -32,6 +32,29 @@ TEMPLATES_DIR = pathlib.Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 _bg_tasks: set[asyncio.Task] = set()
+_drain_call_count = 0
+
+
+async def _save_drain_state() -> None:
+    from analyzer.drain_miner import get_state_json
+    state = get_state_json()
+    async with AsyncSessionLocal() as db:
+        await db.execute(
+            text("INSERT INTO key_value (key, value, updated_at) VALUES ('drain_state', :v, now()) "
+                 "ON CONFLICT (key) DO UPDATE SET value = :v, updated_at = now()"),
+            {"v": state},
+        )
+        await db.commit()
+
+
+async def _load_drain_state() -> None:
+    from analyzer.drain_miner import restore_state_json
+    async with AsyncSessionLocal() as db:
+        row = await db.execute(text("SELECT value FROM key_value WHERE key = 'drain_state'"))
+        state = row.scalar_one_or_none()
+    if state:
+        restore_state_json(state)
+        logger.info("Drain3 상태 복원 완료")
 
 
 async def _auto_build_dataset():
@@ -90,6 +113,7 @@ async def lifespan(app: FastAPI):
     dim = await probe_dim()
     os.environ["EMBED_DIM"] = str(dim)
     await init_db()
+    await _load_drain_state()
     await _embed_seeded_scenarios()
     await _auto_build_dataset()
     yield
@@ -164,8 +188,12 @@ async def analyze_log(req: LogRequest, db: AsyncSession = Depends(get_db)):
     if not req.log.strip():
         raise HTTPException(400, "log 필드가 비어있습니다.")
 
+    global _drain_call_count
     drain_result = drain_add(req.log)
     drain_template = drain_result["template"]
+    _drain_call_count += 1
+    if _drain_call_count % 5 == 0:
+        asyncio.create_task(_save_drain_state())
 
     vecs = await embed_texts(db, [drain_template + " " + req.log])
     similar = await search_similar(db, vecs[0], k=5, exclude_test=True)
