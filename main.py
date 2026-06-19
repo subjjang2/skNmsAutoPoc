@@ -419,22 +419,18 @@ async def start_eval(req: EvalRunRequest):
 
 @app.get("/api/eval/curve")
 async def eval_curve(run_id: str | None = None, db: AsyncSession = Depends(get_db)):
-    q = select(EvalResult).order_by(EvalResult.step_index)
-    if run_id:
-        q = q.where(EvalResult.run_id == run_id)
-
-    rows = (await db.execute(q)).scalars().all()
-    if not rows and not run_id:
-        # run_id 미지정 시에만 최신 run 자동 선택
+    if not run_id:
+        # run_id 미지정 시 최신 run 자동 선택
         latest = (await db.execute(
             select(EvalResult).order_by(EvalResult.created_at.desc()).limit(1)
         )).scalar_one_or_none()
         if latest:
-            rows = (await db.execute(
-                select(EvalResult)
-                .where(EvalResult.run_id == latest.run_id)
-                .order_by(EvalResult.step_index)
-            )).scalars().all()
+            run_id = latest.run_id
+
+    q = select(EvalResult).order_by(EvalResult.step_index)
+    if run_id:
+        q = q.where(EvalResult.run_id == run_id)
+    rows = (await db.execute(q)).scalars().all()
 
     majority_baseline = 35  # MONITOR 다수 클래스 추정 기준선
 
