@@ -39,6 +39,13 @@
   .lift-positive { color: var(--green); }
   .lift-negative { color: var(--red); }
   .section-label { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 12px; }
+  .cm-wrap { overflow-x: auto; margin-top: 8px; }
+  .cm-table { border-collapse: collapse; font-size: 12px; }
+  .cm-table th { color: var(--muted); padding: 6px 10px; text-align: center; font-weight: 600; white-space: nowrap; }
+  .cm-table th.row-label { text-align: right; padding-right: 14px; }
+  .cm-table td { width: 64px; height: 40px; text-align: center; font-family: monospace; font-weight: 700; border: 1px solid var(--border); }
+  .cm-axis-label { font-size: 11px; color: var(--muted); text-align: center; margin-top: 4px; }
+  #confusion-section { display: none; }
 </style>
 </head>
 <body>
@@ -112,6 +119,16 @@
     </thead>
     <tbody id="step-table"></tbody>
   </table>
+</div>
+
+<!-- 혼동 행렬 -->
+<div class="card" id="confusion-section">
+  <div class="section-label">혼동 행렬 <span id="cm-step-label" style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);"></span></div>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">행=실제(Gold), 열=예측(Pred). 대각선=정답.</div>
+  <div class="cm-wrap">
+    <table class="cm-table" id="cm-table"></table>
+  </div>
+  <div class="cm-axis-label">← 예측 액션 →</div>
 </div>
 
 </main>
@@ -250,6 +267,10 @@ async function loadCurve() {
       </tr>`;
     }).join('');
 
+    // 혼동 행렬 — 마지막 step 기준
+    const lastPoint = points[points.length - 1];
+    buildConfusion(lastPoint?.detail?.confusion, lastPoint?.label);
+
     // status
     const statusEl = document.getElementById('run-status');
     statusEl.className = 'status-pill done';
@@ -289,6 +310,54 @@ async function startExperiment() {
     statusEl.className = 'status-pill';
     statusEl.textContent = `오류: ${e.message}`;
   }
+}
+
+function buildConfusion(confusion, stepLabel) {
+  const section = document.getElementById('confusion-section');
+  if (!confusion || !Object.keys(confusion).length) { section.style.display = 'none'; return; }
+
+  const ACTIONS = ['AGENT_RESTART', 'ESCALATE', 'MONITOR', 'RESCHEDULE', 'RESOURCE_CHECK'];
+  const present = ACTIONS.filter(a => confusion[a] || ACTIONS.some(b => (confusion[b] || {})[a]));
+  const labels = present.length ? present : ACTIONS;
+
+  // max value for color scaling
+  let maxVal = 0;
+  for (const row of labels) for (const col of labels) {
+    const v = (confusion[row] || {})[col] || 0;
+    if (v > maxVal) maxVal = v;
+  }
+
+  // short labels for display
+  const SHORT = { AGENT_RESTART:'AGENT_RST', ESCALATE:'ESCALATE', MONITOR:'MONITOR', RESCHEDULE:'RESCHED', RESOURCE_CHECK:'RES_CHK' };
+
+  let html = '<thead><tr><th class="row-label">Gold \\ Pred</th>';
+  for (const col of labels) html += `<th>${SHORT[col] || col}</th>`;
+  html += '</tr></thead><tbody>';
+
+  for (const row of labels) {
+    html += `<tr><th class="row-label">${SHORT[row] || row}</th>`;
+    for (const col of labels) {
+      const v = (confusion[row] || {})[col] || 0;
+      const isDiag = row === col;
+      const intensity = maxVal > 0 ? v / maxVal : 0;
+      let bg, fg;
+      if (isDiag) {
+        const g = Math.round(40 + intensity * 120);
+        bg = `rgba(63,185,80,${0.15 + intensity * 0.6})`;
+        fg = intensity > 0.3 ? '#3fb950' : 'var(--muted)';
+      } else {
+        bg = v > 0 ? `rgba(248,81,73,${0.1 + intensity * 0.5})` : 'transparent';
+        fg = v > 0 ? '#f85149' : 'var(--muted)';
+      }
+      html += `<td style="background:${bg};color:${fg};">${v || '—'}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody>';
+
+  document.getElementById('cm-table').innerHTML = html;
+  document.getElementById('cm-step-label').textContent = stepLabel ? `— 마지막 step: ${stepLabel}` : '';
+  section.style.display = '';
 }
 
 loadCurve();
