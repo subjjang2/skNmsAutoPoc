@@ -218,7 +218,12 @@ async function loadCurve() {
     const url = currentRunId ? `/api/eval/curve?run_id=${currentRunId}` : '/api/eval/curve';
     const data = await fetch(url).then(r => r.json());
     if (!data.points || !data.points.length) {
-      document.getElementById('run-id-label').textContent = '데이터 없음 — 실험 먼저 실행하세요';
+      if (currentRunId) {
+        // 실험 진행 중 — 상태 유지 (완료로 바꾸지 않음)
+        document.getElementById('run-id-label').textContent = `run: ${currentRunId} (결과 대기 중...)`;
+      } else {
+        document.getElementById('run-id-label').textContent = '데이터 없음 — 실험 먼저 실행하세요';
+      }
       return;
     }
 
@@ -309,9 +314,18 @@ async function startExperiment() {
     // 5초마다 폴링
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(async () => {
-      await loadCurve();
-      const points = (await fetch(`/api/eval/curve?run_id=${currentRunId}`).then(r=>r.json())).points;
-      if (points && points.length >= 6) {
+      const resp = await fetch(`/api/eval/curve?run_id=${currentRunId}`).then(r=>r.json());
+      const points = resp.points || [];
+      // 새 run 데이터로만 UI 갱신
+      if (points.length > 0 && resp.run_id === currentRunId) {
+        await loadCurve();
+      } else {
+        // 아직 결과 없음 — 진행 중 표시만 갱신
+        document.getElementById('run-status').className = 'status-pill running';
+        document.getElementById('run-status').textContent = `실행 중... (${points.length}/6 step)`;
+        document.getElementById('run-id-label').textContent = `run: ${currentRunId} (결과 대기 중...)`;
+      }
+      if (points.length >= 6 && resp.run_id === currentRunId) {
         clearInterval(pollTimer);
         pollTimer = null;
       }
