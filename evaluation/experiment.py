@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 DATA_DIR = pathlib.Path(__file__).parent.parent / "data" / "openstack"
 
 DEFAULT_STEPS = [
-    (0, 0),      # 베이스라인: 비교 사례 없음, LLM 단독 추측 → ~20-35%
+    (0, 0),      # 베이스라인: 비교 사례 없음 → OPS_WATCH 강제 반환 → ~0-10%
     (200, 0),
     (800, 0),
     (800, 100),
@@ -75,18 +75,10 @@ async def run_experiment(
 
     train_pool = _load_json(DATA_DIR / "train_pool.json")
 
-    # alt_logs가 충분히 있으면 DB에서 test_set 구성 (data leakage 방지)
-    alt_test_set = await _build_alt_test_set()
-    if len(alt_test_set) >= 30:
-        test_set = alt_test_set
-        logger.info("alt_logs test_set 사용: %d건 (data leakage 없음)", len(test_set))
-    else:
-        test_set = _load_json(DATA_DIR / "test_set.json")
-        logger.info("test_set.json 사용: %d건", len(test_set))
-
-    # hard difficulty만 평가 — 현실적 수치, 경계 케이스 집중
-    test_set = [t for t in test_set if t.get("difficulty") == "hard"]
-    logger.info("hard-only test_set: %d건", len(test_set))
+    # test_set = hold_out 시나리오 (build_dataset가 생성). train_pool과 모집단 분리됨.
+    # hold_out 패턴은 gold_pool로만 커버 → gold 추가 시 정확도 상승.
+    test_set = _load_json(DATA_DIR / "test_set.json")
+    logger.info("test_set (hold_out) 사용: %d건", len(test_set))
 
     if not train_pool or not test_set:
         raise RuntimeError(
@@ -139,7 +131,9 @@ async def run_experiment(
                         is_gold=False,
                         is_test=False,
                         source="normal",
+                        commit=False,
                     )
+                await db.commit()
 
             # 3) gold 적재
             gold_rows = gold_pool[:gold_count]
@@ -160,7 +154,9 @@ async def run_experiment(
                         is_gold=True,
                         is_test=False,
                         source="gold",
+                        commit=False,
                     )
+                await db.commit()
 
             # 4) ivfflat 인덱스 (rows > 1000 시 효과)
             if train_count + gold_count > 1000:

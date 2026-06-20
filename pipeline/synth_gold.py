@@ -21,10 +21,11 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-def _load_scenarios(difficulties=("hard", "medium")) -> list[dict]:
+def _load_scenarios() -> list[dict]:
+    """gold = hold_out 전용 (신규 장애 유형). train_pool엔 없는 패턴이라
+    gold 추가 시에만 정확도 상승 → gold 중요성 데모."""
     data = yaml.safe_load(SCENARIOS_YAML.read_text(encoding="utf-8"))
-    return [s for s in data.get("scenarios", [])
-            if s.get("difficulty") in difficulties and not s.get("hold_out", False)]
+    return [s for s in data.get("scenarios", []) if s.get("hold_out", False)]
 
 
 def _extract_json_array(raw: str) -> list:
@@ -84,9 +85,9 @@ async def generate(n_per: int = 30, on_progress=None) -> list[dict]:
     load_dotenv()
     from db.database import AsyncSessionLocal
 
-    scenarios = _load_scenarios(difficulties=("hard", "medium"))
+    scenarios = _load_scenarios()
     total = len(scenarios)
-    logger.info("대상 시나리오: %d개 (hard/medium), 시나리오당 %d건", total, n_per)
+    logger.info("대상 시나리오: %d개 (hold_out 전용), 시나리오당 %d건", total, n_per)
     if on_progress:
         on_progress(0, total, "", 0, None)
 

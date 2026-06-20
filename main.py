@@ -105,7 +105,9 @@ async def _embed_seeded_scenarios():
                 is_gold=row.is_gold,
                 is_test=row.is_test,
                 source=row.source,
+                commit=False,
             )
+        await db.commit()
     logger.info("시드 시나리오 임베딩 완료 (%d개)", len(rows))
 
 
@@ -515,7 +517,7 @@ async def eval_curve(run_id: str | None = None, db: AsyncSession = Depends(get_d
         q = q.where(EvalResult.run_id == run_id)
     rows = (await db.execute(q)).scalars().all()
 
-    majority_baseline = 16  # RESCHEDULE 7/45 = 15.6% — 최다 클래스 기준선
+    majority_baseline = 25  # hold_out test 최다 클래스 2/8 = 25% (STORAGE_TEAM/COMPUTE_OPS)
 
     return {
         "run_id": rows[0].run_id if rows else run_id,

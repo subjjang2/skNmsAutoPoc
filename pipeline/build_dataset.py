@@ -45,21 +45,29 @@ def _label_lines(lines: list[str], patterns: list[dict]) -> list[dict]:
     return labeled
 
 
-def _synthetic_rows_from_scenarios(patterns: list[dict], n_per: int = 30) -> list[dict]:
-    """scenarios.yaml log_text augmentation → 합성 라벨 데이터. hold_out 시나리오 제외."""
+def _augment(base: str) -> str:
+    line = re.sub(r'compute-\d+', f'compute-{random.randint(1, 20):02d}', base)
+    line = re.sub(r'\b(\d+)s\b', lambda m: f'{random.randint(10, 120)}s', line)
+    line = re.sub(r'\b9\d%', f'{random.randint(90, 99)}%', line)
+    return line
+
+
+def _synthetic_rows_from_scenarios(patterns: list[dict], n_per: int = 30,
+                                   hold_out_only: bool = False) -> list[dict]:
+    """scenarios.yaml log_text augmentation → 합성 라벨 데이터.
+    hold_out_only=False → train용 (hold_out 제외)
+    hold_out_only=True  → test용 (hold_out 시나리오만, gold가 커버할 신규 유형)
+    """
     rows = []
     for s in patterns:
-        if s.get("hold_out", False):
-            continue  # hold_out 시나리오는 train_pool에 포함하지 않음
+        if s.get("hold_out", False) != hold_out_only:
+            continue
         base = s.get("log_text", "")
         if not base:
             continue
         for _ in range(n_per):
-            line = re.sub(r'compute-\d+', f'compute-{random.randint(1, 20):02d}', base)
-            line = re.sub(r'\b(\d+)s\b', lambda m: f'{random.randint(10, 120)}s', line)
-            line = re.sub(r'\b9\d%', f'{random.randint(90, 99)}%', line)
             rows.append({
-                "raw_log": line,
+                "raw_log": _augment(base),
                 "action": s["action"],
                 "difficulty": s["difficulty"],
                 "scenario_id": s["id"],
@@ -96,24 +104,31 @@ def _coverage_report(total: int, labeled: int, train: list[dict], test: list[dic
 
 
 def build(test_size: int = 1000) -> dict:
+    """train_pool = hold_out 제외 시나리오, test_set = hold_out 시나리오.
+    train/test가 서로 다른 시나리오 모집단 → 누수 없음.
+    test의 hold_out 패턴은 gold_pool(=hold_out paraphrase)로만 커버 가능
+    → gold 추가 시에만 정확도 상승하는 학습 곡선 생성.
+    """
     from pipeline.log_loader import load_raw_lines
     lines = load_raw_lines()
     patterns = _load_patterns()
+    hold_ids = {s["id"] for s in patterns if s.get("hold_out", False)}
 
     print(f"Labeling {len(lines)} lines with {len(patterns)} patterns …")
     labeled = _label_lines(lines, patterns)
-    print(f"Matched {len(labeled)} / {len(lines)} lines "
-          f"({len(labeled)/len(lines)*100:.1f}% coverage)")
+    # 실제 로그 라벨 중 hold_out 시나리오 매칭은 train에서 제외 (test 전용)
+    labeled = [r for r in labeled if r["scenario_id"] not in hold_ids]
+    print(f"Matched {len(labeled)} / {len(lines)} lines (hold_out 제외)")
 
-    synthetic = _synthetic_rows_from_scenarios(patterns, n_per=30)
-    print(f"Synthetic rows from log_text augmentation: {len(synthetic)}")
-    labeled = labeled + synthetic
+    # train = hold_out 제외 시나리오, test = hold_out 시나리오
+    train_synth = _synthetic_rows_from_scenarios(patterns, n_per=30, hold_out_only=False)
+    test = _synthetic_rows_from_scenarios(patterns, n_per=30, hold_out_only=True)
+    print(f"train synthetic: {len(train_synth)}, test (hold_out): {len(test)}")
 
-    if len(labeled) < test_size + 100:
-        print(f"WARNING: only {len(labeled)} labeled rows, test_size clamped", file=sys.stderr)
-        test_size = max(10, len(labeled) // 5)
-
-    train, test = _split(labeled, test_size)
+    train = labeled + train_synth
+    random.seed(42)
+    random.shuffle(train)
+    random.shuffle(test)
     _add_ids(train, "TRN")
     _add_ids(test, "TST")
 
