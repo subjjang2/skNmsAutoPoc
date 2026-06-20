@@ -74,10 +74,9 @@ async def init_db():
             # hold_out 시나리오 임베딩 초기화 (시드에서 제거)
             "UPDATE scenarios SET embedding = NULL, hold_out = TRUE WHERE scenario_id IN "
             "('SCN-033','SCN-034','SCN-035','SCN-036','SCN-037','SCN-038','SCN-039','SCN-040')",
-            # 액션 10개 재설계 후 구버전 synth_gold 삭제 (action 라벨 불일치)
-            "DELETE FROM scenarios WHERE source = 'synth_gold'",
             # 지난 실험 임시 행 정리 (RUN-*-TRN/GLD). 실험마다 재생성되므로 보존 불필요.
             # eval_results(실험 결과/곡선)는 별도 테이블이라 영향 없음.
+            # 주의: synth_gold(생성한 gold)는 절대 자동 삭제 금지 — 재시작 시 보존돼야 함.
             "DELETE FROM scenarios WHERE scenario_id LIKE 'RUN-%'",
         ]:
             await conn.execute(text(stmt))
