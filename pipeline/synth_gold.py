@@ -59,7 +59,7 @@ async def _generate_batch(db, scenario: dict, n: int) -> tuple[list[str], str | 
 
 async def _generate_variants(db, scenario: dict, n: int) -> tuple[list[str], str | None]:
     """n건을 BATCH_SIZE씩 나눠서 호출."""
-    BATCH_SIZE = 10
+    BATCH_SIZE = 5
     results: list[str] = []
     last_err: str | None = None
 
