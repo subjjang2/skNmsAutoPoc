@@ -84,6 +84,10 @@ async def run_experiment(
         test_set = _load_json(DATA_DIR / "test_set.json")
         logger.info("test_set.json 사용: %d건", len(test_set))
 
+    # hard difficulty만 평가 — 현실적 수치, 경계 케이스 집중
+    test_set = [t for t in test_set if t.get("difficulty") == "hard"]
+    logger.info("hard-only test_set: %d건", len(test_set))
+
     if not train_pool or not test_set:
         raise RuntimeError(
             "train_pool.json 또는 test_set.json 없음. "
