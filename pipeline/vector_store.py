@@ -52,8 +52,11 @@ async def upsert_scenario(
     is_gold: bool = False,
     is_test: bool = False,
     source: str = "normal",
+    commit: bool = True,
 ) -> None:
-    """scenarios 행 upsert (embedding 포함). scenario_id unique 충돌 시 UPDATE."""
+    """scenarios 행 upsert (embedding 포함). scenario_id unique 충돌 시 UPDATE.
+    commit=False 사용 시 호출자가 일괄 commit 책임 (배치 성능).
+    """
     vec_str = _vec_literal(vector)
     existing = await db.execute(
         select(Scenario).where(Scenario.scenario_id == scenario_id)
@@ -96,7 +99,8 @@ async def upsert_scenario(
             text("UPDATE scenarios SET embedding = CAST(:vec AS vector) WHERE scenario_id = :sid"),
             {"vec": vec_str, "sid": scenario_id},
         )
-    await db.commit()
+    if commit:
+        await db.commit()
 
 
 async def upsert_scenario_batch(
