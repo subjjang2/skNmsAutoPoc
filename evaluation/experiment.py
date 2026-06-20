@@ -101,7 +101,26 @@ async def run_experiment(
     logger.info("Experiment %s: %d steps, train_pool=%d, test_set=%d, gold_pool=%d",
                 run_id, len(steps), len(train_pool), len(test_set), len(gold_pool))
 
+    # 임베딩 캐시: 텍스트→벡터는 결정적이므로 단계마다 재계산하지 않고 1회만.
+    # 최대 train/gold 건수만큼 미리 전부 임베딩 → 단계 루프는 조회만 (5~6배 빠름).
+    from analyzer.drain_miner import add_log as _drain_add
+
+    def _row_text(r: dict) -> str:
+        return _drain_add(r["raw_log"]).get("template", r["raw_log"]) + " " + r["raw_log"]
+
+    max_train = max((s[0] for s in steps), default=0)
+    max_gold = max((s[1] for s in steps), default=0)
+
     async with AsyncSessionLocal() as db:
+        train_vec_cache: list[list[float]] = []
+        if max_train:
+            logger.info("train 임베딩 캐시 생성: %d건 (1회)", min(max_train, len(train_pool)))
+            train_vec_cache = await embed_texts(db, [_row_text(r) for r in train_pool[:max_train]])
+        gold_vec_cache: list[list[float]] = []
+        if max_gold and gold_pool:
+            logger.info("gold 임베딩 캐시 생성: %d건 (1회)", min(max_gold, len(gold_pool)))
+            gold_vec_cache = await embed_texts(db, [_row_text(r) for r in gold_pool[:max_gold]])
+
         for step_idx, (train_count, gold_count) in enumerate(steps):
             if gold_count > 0 and not gold_pool:
                 logger.warning("Step %d: gold_count=%d 요청이나 gold_pool 없음 — 스킵", step_idx, gold_count)
@@ -111,16 +130,10 @@ async def run_experiment(
             # 1) 학습 임베딩 초기화
             await reset_training_embeddings(db)
 
-            # 2) train_pool 적재
+            # 2) train_pool 적재 (캐시된 벡터 재사용)
             train_rows = train_pool[:train_count]
             if train_rows:
-                from analyzer.drain_miner import add_log as _drain_add
-                train_texts = [
-                    _drain_add(r["raw_log"]).get("template", r["raw_log"]) + " " + r["raw_log"]
-                    for r in train_rows
-                ]
-                train_vecs = await embed_texts(db, train_texts)
-                for row, vec in zip(train_rows, train_vecs):
+                for row, vec in zip(train_rows, train_vec_cache[:train_count]):
                     await upsert_scenario(
                         db,
                         scenario_id=f"{run_id}-TRN-{row['id']}",
@@ -135,15 +148,10 @@ async def run_experiment(
                     )
                 await db.commit()
 
-            # 3) gold 적재
+            # 3) gold 적재 (캐시된 벡터 재사용)
             gold_rows = gold_pool[:gold_count]
             if gold_rows:
-                gold_texts = [
-                    _drain_add(r["raw_log"]).get("template", r["raw_log"]) + " " + r["raw_log"]
-                    for r in gold_rows
-                ]
-                gold_vecs = await embed_texts(db, gold_texts)
-                for row, vec in zip(gold_rows, gold_vecs):
+                for row, vec in zip(gold_rows, gold_vec_cache[:gold_count]):
                     await upsert_scenario(
                         db,
                         scenario_id=f"{run_id}-GLD-{row['id']}",
