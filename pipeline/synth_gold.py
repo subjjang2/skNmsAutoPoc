@@ -76,9 +76,12 @@ async def generate(n_per: int = 30) -> list[dict]:
                 })
             logger.info("[%d/%d] %s → %d건 생성", i, len(scenarios), s["id"], len(variants))
 
+    import random
+    random.shuffle(rows)
+
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     GOLD_POOL_JSON.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
-    logger.info("gold_pool.json 저장: %d건 총계", len(rows))
+    logger.info("gold_pool.json 저장: %d건 총계 (셔플 완료)", len(rows))
     return rows
 
 
