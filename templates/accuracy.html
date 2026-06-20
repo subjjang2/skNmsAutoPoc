@@ -89,23 +89,28 @@
 <div class="card" style="border-color: rgba(88,166,255,.3); background: rgba(88,166,255,.05);">
   <div style="font-size:15px; font-weight:600; margin-bottom:12px;">이 페이지는 무엇인가요?</div>
   <div style="font-size:13px; color:var(--text); line-height:1.8;">
-    <strong>AI에게 참고 자료를 많이 줄수록 정답률이 오르는지 측정하는 페이지입니다.</strong><br><br>
+    <strong>일반 로그를 아무리 많이 모아도 "처음 보는 희귀 장애"는 못 맞히고, 운영자가 검수한 골드(Gold)를 넣어야 정확도가 오른다 — 이걸 증명하는 페이지입니다.</strong><br><br>
 
-    AI는 로그가 들어오면 과거 사례를 참고해서 어떤 조치를 취할지 결정합니다.<br>
-    참고 자료(사례)가 많을수록 더 정확한 판단을 할 수 있는지 실험으로 확인합니다.<br><br>
+    <span style="color:var(--accent);">🚗 테슬라 자율주행 비유</span>: 테슬라는 일반 주행 영상을 수백만 시간 모으지만,
+    <strong>뒤집힌 트럭</strong> 같은 희귀 상황은 거의 안 잡힙니다. 그때 운전자가 <strong>핸들을 잡고 개입(disengagement)</strong>하고,
+    그 개입 기록이 <span style="color:var(--green);">최고의 학습 데이터(Gold)</span>가 됩니다.<br><br>
+
+    이 실험의 <strong>시험 문제(test)는 일부러 AI가 안 배운 희귀 장애 8종</strong>으로 냈습니다.<br>
+    • 일반 학습 데이터(train)에는 이 8종이 <span style="color:var(--red);">없습니다</span> → 양을 늘려도 못 맞힘<br>
+    • <span style="color:var(--green);">골드(Gold)</span>에만 이 8종의 정답이 들어있습니다 → 넣으면 급상승<br><br>
 
     <strong style="color:var(--accent);">6단계 실험 순서</strong><br>
     <div style="margin:8px 0 0 8px; display:grid; gap:4px;">
-      <div>① 참고 사례 <strong>200개</strong> 제공 → 시험 200문제 채점</div>
-      <div>② 참고 사례 <strong>400개</strong> 제공 → 시험 200문제 채점</div>
-      <div>③ 참고 사례 <strong>800개</strong> 제공 → 시험 200문제 채점</div>
-      <div>④ 800개 + <span style="color:var(--yellow);">골드 100개</span> 추가 → 채점</div>
-      <div>⑤ 800개 + <span style="color:var(--yellow);">골드 300개</span> 추가 → 채점</div>
-      <div>⑥ 800개 + <span style="color:var(--yellow);">골드 600개</span> 추가 → 채점</div>
+      <div>① 일반 사례 <strong>200개</strong> → 희귀 장애 시험 채점 <span style="color:var(--muted);">(못 맞힘)</span></div>
+      <div>② 일반 사례 <strong>400개</strong> → 채점 <span style="color:var(--muted);">(양 늘려도 그대로/하락)</span></div>
+      <div>③ 일반 사례 <strong>800개</strong> → 채점 <span style="color:var(--muted);">(양만으론 한계)</span></div>
+      <div>④ 800개 + <span style="color:var(--green);">골드 100개</span> → 채점 <span style="color:var(--green);">(상승 시작)</span></div>
+      <div>⑤ 800개 + <span style="color:var(--green);">골드 300개</span> → 채점 <span style="color:var(--green);">(더 상승)</span></div>
+      <div>⑥ 800개 + <span style="color:var(--green);">골드 600개</span> → 채점 <span style="color:var(--green);">(급상승)</span></div>
     </div><br>
 
-    <span style="color:var(--yellow);">골드 데이터</span>란? 운영자가 대시보드에서 직접 "이 판단이 맞다/틀렸다" 검수한 고품질 사례.<br>
-    골드가 쌓일수록 AI 정확도가 더 오르는지 확인하는 것이 이 실험의 핵심입니다.
+    <span style="color:var(--green);">골드 데이터</span>란? 운영자가 대시보드에서 직접 "이 판단이 틀렸다, 정답은 이거다" 검수·교정한 고품질 사례.<br>
+    <strong>핵심 메시지: 정확도는 로그 "양"이 아니라, 빠진 장애의 정답(Gold)을 채우느냐가 결정한다.</strong>
   </div>
 </div>
 
@@ -119,8 +124,9 @@
     <span style="font-size:12px; color:var(--muted);" id="run-id-label"></span>
   </div>
   <div style="font-size:12px; color:var(--muted);">
-    학습 step: 200 → 400 → 800 &nbsp;|&nbsp; 골드 step: 100 → 300 → 600<br>
-    <span style="color:var(--yellow);">주의: build_dataset.py 실행 후 사용하세요</span>
+    일반 학습 step: 200 → 400 → 800 &nbsp;|&nbsp; 골드 step: 100 → 300 → 600<br>
+    시험: 희귀 장애 8종(hold_out) — 일반 학습엔 없고 골드에만 정답 있음<br>
+    <span style="color:var(--yellow);">주의: build_dataset.py 실행 + 골드 생성 후 사용하세요</span>
   </div>
 </div>
 
