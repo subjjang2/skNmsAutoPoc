@@ -13,13 +13,30 @@ from pipeline.vector_store import search_similar
 logger = logging.getLogger(__name__)
 
 
-async def evaluate(db: AsyncSession, test_set: list[dict]) -> dict:
-    """test_set 전체 평가. is_test=true 행은 search_similar에서 자동 제외."""
+async def evaluate(db: AsyncSession, test_set: list[dict],
+                   vec_cache: dict | None = None) -> dict:
+    """test_set 전체 평가. is_test=true 행은 search_similar에서 자동 제외.
+    vec_cache: 단계 간 test 임베딩 재사용용 dict (id→(drain_template, vector)).
+               전달 시 test 임베딩을 1회만 계산. (text→vector는 결정적)
+    """
+    from analyzer.drain_miner import add_log as drain_add
     correct = 0
     total = len(test_set)
     diff_correct: dict[str, int] = defaultdict(int)
     diff_total: dict[str, int] = defaultdict(int)
     confusion: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+
+    if vec_cache is None:
+        vec_cache = {}
+
+    # 캐시 미스 항목만 배치 임베딩 (첫 단계에서 전부, 이후 재사용)
+    missing = [it for it in test_set if it.get("id") not in vec_cache]
+    if missing:
+        templates = [drain_add(it["raw_log"]).get("template", it["raw_log"]) for it in missing]
+        texts = [t + " " + it["raw_log"] for t, it in zip(templates, missing)]
+        vecs = await embed_texts(db, texts)
+        for it, tmpl, vec in zip(missing, templates, vecs):
+            vec_cache[it["id"]] = (tmpl, vec)
 
     for item in test_set:
         raw_log = item["raw_log"]
@@ -28,11 +45,8 @@ async def evaluate(db: AsyncSession, test_set: list[dict]) -> dict:
         diff_total[difficulty] += 1
 
         try:
-            from analyzer.drain_miner import add_log as drain_add
-            drain_result = drain_add(raw_log)
-            drain_template = drain_result.get("template", raw_log)
-            vecs = await embed_texts(db, [drain_template + " " + raw_log])
-            similar = await search_similar(db, vecs[0], k=5, exclude_test=True, exclude_seeds=True)
+            drain_template, vec = vec_cache[item["id"]]
+            similar = await search_similar(db, vec, k=5, exclude_test=True, exclude_seeds=True)
             pred_action, _, _, _ = await recommend(db, raw_log, drain_template, similar)
         except Exception as e:
             logger.warning("Eval item %s failed: %s", item.get("id"), e)

@@ -111,6 +111,8 @@ async def run_experiment(
     max_train = max((s[0] for s in steps), default=0)
     max_gold = max((s[1] for s in steps), default=0)
 
+    test_vec_cache: dict = {}  # test 임베딩 단계 간 재사용
+
     async with AsyncSessionLocal() as db:
         train_vec_cache: list[list[float]] = []
         if max_train:
@@ -170,8 +172,8 @@ async def run_experiment(
             if train_count + gold_count > 1000:
                 await create_ivfflat_index(db)
 
-            # 5) 평가
-            result = await evaluate(db, test_set)
+            # 5) 평가 (test 임베딩은 캐시 재사용)
+            result = await evaluate(db, test_set, vec_cache=test_vec_cache)
 
             # 6) EvalResult 저장
             db.add(EvalResult(
