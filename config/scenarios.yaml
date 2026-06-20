@@ -3,42 +3,42 @@ scenarios:
   # ── AGENT_RESTART (6) — OpenStack 서비스 에이전트 ─────────────────────
   - id: SCN-001
     pattern_regex: "nova-compute.*(not responding|service is down|heartbeat missed)"
-    action: AGENT_RESTART
+    action: SVC_TEAM_A
     difficulty: easy
     description: "nova-compute 에이전트 응답 없음 → 재시작"
     log_text: "nova-compute is not responding, heartbeat missed for 60 seconds on host compute-01"
 
   - id: SCN-002
     pattern_regex: "(neutron|cinder|glance)-agent.*(timeout|not responding|lost contact)"
-    action: AGENT_RESTART
+    action: SVC_TEAM_A
     difficulty: easy
     description: "OpenStack 에이전트 타임아웃 → 재시작"
     log_text: "neutron-agent timeout after 30s, not responding to health check, lost contact with server"
 
   - id: SCN-004
     pattern_regex: "(?i)(service|process) (crash|died|exited unexpectedly|killed)"
-    action: AGENT_RESTART
+    action: SVC_TEAM_A
     difficulty: easy
     description: "서비스 비정상 종료 → 재시작"
     log_text: "nova-compute service crash detected, process died unexpectedly with exit code 1"
 
   - id: SCN-007
     pattern_regex: "keystone.*token (validation|revocation) service.*unavailable"
-    action: AGENT_RESTART
+    action: SVC_TEAM_A
     difficulty: hard
     description: "Keystone 토큰 서비스 불가 → 인증 에이전트 재시작"
     log_text: "keystone token validation service unavailable, revocation service not responding"
 
   - id: SCN-032
     pattern_regex: "neutron.*dhcp.*(agent|lease).*(not responding|failed|timeout)"
-    action: AGENT_RESTART
+    action: SVC_TEAM_A
     difficulty: medium
     description: "Neutron DHCP 에이전트 응답 없음 → 재시작"
     log_text: "neutron dhcp agent not responding on network node, lease allocation failed, dhcp timeout for subnet"
 
   - id: SCN-040
     pattern_regex: "designate.*(dns|zone|record).*(sync.*failed|backend.*error|timeout)"
-    action: AGENT_RESTART
+    action: SVC_TEAM_A
     difficulty: medium
     hold_out: true
     description: "Designate DNS 백엔드 동기화 실패 → 에이전트 재시작"
@@ -47,28 +47,28 @@ scenarios:
   # ── DEPENDENCY_RESTART (5) — 하위 의존 데몬/브로커/프록시 ────────────
   - id: SCN-003
     pattern_regex: "oslo.messaging.*connection (refused|reset|broken)"
-    action: DEPENDENCY_RESTART
+    action: SVC_TEAM_B
     difficulty: medium
     description: "RabbitMQ/oslo.messaging 연결 끊김 → 브로커 재시작"
     log_text: "oslo.messaging AMQP connection refused to rabbitmq broker, connection reset by peer"
 
   - id: SCN-005
     pattern_regex: "nova.compute.*Failed to connect to hypervisor"
-    action: DEPENDENCY_RESTART
+    action: SVC_TEAM_B
     difficulty: hard
     description: "하이퍼바이저 연결 실패 → libvirt/hypervisor 데몬 재시작"
     log_text: "nova.compute.manager Failed to connect to hypervisor on compute-03, libvirt unreachable"
 
   - id: SCN-006
     pattern_regex: "libvirt.*connection refused|virsh.*connection failed"
-    action: DEPENDENCY_RESTART
+    action: SVC_TEAM_B
     difficulty: hard
     description: "libvirt 데몬 연결 실패 → libvirt 재시작"
     log_text: "libvirt connection refused at /var/run/libvirt/libvirt-sock, virsh connection failed"
 
   - id: SCN-039
     pattern_regex: "nova.*(console|vnc|spice).*(unavailable|connection.*refused|proxy.*error)"
-    action: DEPENDENCY_RESTART
+    action: SVC_TEAM_B
     difficulty: hard
     hold_out: true
     description: "Nova VNC 콘솔 프록시 연결 불가 → novncproxy 재시작"
@@ -76,7 +76,7 @@ scenarios:
 
   - id: SCN-044
     pattern_regex: "rabbitmq.*(partition|split.brain|cluster.*disconnect|mnesia.*conflict)"
-    action: DEPENDENCY_RESTART
+    action: SVC_TEAM_B
     difficulty: hard
     description: "RabbitMQ 클러스터 파티션 → 브로커 재조인"
     log_text: "rabbitmq cluster partition detected, split-brain between nodes mq-01 mq-02, mnesia conflict"
@@ -84,35 +84,35 @@ scenarios:
   # ── RESOURCE_CHECK (5) — 물리 자원 점검 ───────────────────────────────
   - id: SCN-008
     pattern_regex: "No valid host was found.*(not enough|insufficient) (RAM|memory|disk|vcpu)"
-    action: RESOURCE_CHECK
+    action: INFRA_TEAM
     difficulty: medium
     description: "스케줄러 자원 부족 → 자원 점검"
     log_text: "No valid host was found. There are not enough hosts available due to insufficient RAM and vcpu"
 
   - id: SCN-009
     pattern_regex: "Disk (usage|space).*(9[0-9]%|100%|full)|No space left on device"
-    action: RESOURCE_CHECK
+    action: INFRA_TEAM
     difficulty: easy
     description: "디스크 포화 → 자원 점검"
     log_text: "Disk usage reached 97% on /dev/sda1. No space left on device for nova instance storage"
 
   - id: SCN-010
     pattern_regex: "memory (pressure|exhausted|oom|out.of.memory)"
-    action: RESOURCE_CHECK
+    action: INFRA_TEAM
     difficulty: medium
     description: "메모리 부족 → 자원 점검"
     log_text: "memory pressure critical, OOM killer invoked, out of memory on compute node"
 
   - id: SCN-011
     pattern_regex: "cpu.*(throttling|limit reached|usage.*100%)|load average.*(1[5-9]|[2-9][0-9])\\."
-    action: RESOURCE_CHECK
+    action: INFRA_TEAM
     difficulty: medium
     description: "CPU 과부하 → 자원 점검"
     log_text: "cpu throttling active, usage 100% sustained, load average 18.5 on 8 core compute host"
 
   - id: SCN-012
     pattern_regex: "nova.scheduler.*ComputeFilter.*no valid host|FilterScheduler.*filtered.*all"
-    action: RESOURCE_CHECK
+    action: INFRA_TEAM
     difficulty: hard
     description: "스케줄러 필터 전체 실패 → 전체 클러스터 자원 점검"
     log_text: "nova.scheduler ComputeFilter no valid host found, FilterScheduler filtered all available hosts"
@@ -120,21 +120,21 @@ scenarios:
   # ── QUOTA_ADJUST (3) — 테넌트 할당량/한도 조정 ───────────────────────
   - id: SCN-013
     pattern_regex: "quota.*exceeded|limit.*reached.*(volume|instance|floating.ip|security.group)"
-    action: QUOTA_ADJUST
+    action: TENANT_OPS
     difficulty: medium
     description: "테넌트 할당량 초과 → 쿼터 조정"
     log_text: "quota exceeded for tenant, instance limit reached, volume quota exceeded for project"
 
   - id: SCN-041
     pattern_regex: "nova.*Quota exceeded.*cores|tenant.*vcpu.*quota.*reached|MaxComputeCountExceeded"
-    action: QUOTA_ADJUST
+    action: TENANT_OPS
     difficulty: medium
     description: "Nova 컴퓨트 코어 쿼터 초과 → 테넌트 할당량 조정"
     log_text: "nova Quota exceeded for cores, tenant vcpu quota reached 40/40, MaxComputeCountExceeded for project-abc"
 
   - id: SCN-042
     pattern_regex: "neutron.*FloatingIP.*quota.*exceeded|floating.ip.*(pool.*exhausted|limit.*reached)"
-    action: QUOTA_ADJUST
+    action: TENANT_OPS
     difficulty: medium
     description: "Floating IP 풀 고갈 → 쿼터 확장 또는 회수"
     log_text: "neutron FloatingIP quota exceeded, floating ip pool exhausted for external network, limit reached 50/50"
@@ -142,42 +142,42 @@ scenarios:
   # ── RESCHEDULE (7) — 다른 호스트로 재배치 ────────────────────────────
   - id: SCN-014
     pattern_regex: "nova.scheduler.*retry.*(schedule|launch)|rescheduling.*attempt [2-9]"
-    action: RESCHEDULE
+    action: COMPUTE_OPS
     difficulty: medium
     description: "VM 스케줄 재시도 → 다른 호스트 재스케줄"
     log_text: "nova.scheduler retry schedule after failure, rescheduling attempt 2 for instance i-12345678"
 
   - id: SCN-015
     pattern_regex: "nova.conductor.*(reschedul|retry launch)|instance.*retry.*compute"
-    action: RESCHEDULE
+    action: COMPUTE_OPS
     difficulty: medium
     description: "nova-conductor 재스케줄 → 다른 컴퓨트로 재배치"
     log_text: "nova.conductor reschedul instance to another compute node, retry launch after resource error"
 
   - id: SCN-016
     pattern_regex: "placement.*(no.*allocation|no.*candidate)|resource.provider.*no capacity"
-    action: RESCHEDULE
+    action: COMPUTE_OPS
     difficulty: hard
     description: "Placement API 할당 실패 → 재스케줄"
     log_text: "placement no allocation candidates found, resource provider has no capacity for requested resources"
 
   - id: SCN-017
     pattern_regex: "live migration failed.*instance|migration.*failed.*rollback"
-    action: RESCHEDULE
+    action: COMPUTE_OPS
     difficulty: hard
     description: "라이브 마이그레이션 실패 → 재스케줄"
     log_text: "live migration failed for instance i-00001234, retrying rescheduling to another available host"
 
   - id: SCN-018
     pattern_regex: "anti-affinity.*group.*constraint.*failed"
-    action: RESCHEDULE
+    action: COMPUTE_OPS
     difficulty: hard
     description: "안티어피니티 제약 충돌 → 다른 컴퓨트로 재스케줄"
     log_text: "anti-affinity server group constraint failed, rescheduling instance to non-conflicting host"
 
   - id: SCN-036
     pattern_regex: "ironic.*(node|baremetal).*(provision.*failed|deploy.*error|unreachable)"
-    action: RESCHEDULE
+    action: COMPUTE_OPS
     difficulty: hard
     hold_out: true
     description: "Ironic 베어메탈 프로비저닝 실패 → 다른 노드로 재스케줄"
@@ -185,7 +185,7 @@ scenarios:
 
   - id: SCN-038
     pattern_regex: "magnum.*(cluster|node).*(unreachable|NotReady|failed to join)"
-    action: RESCHEDULE
+    action: COMPUTE_OPS
     difficulty: hard
     hold_out: true
     description: "Magnum 컨테이너 클러스터 노드 이탈 → 재스케줄"
@@ -194,21 +194,21 @@ scenarios:
   # ── MONITOR (3) — 추이 관찰, 자동 회복 가능 ──────────────────────────
   - id: SCN-019
     pattern_regex: "(Timeout|timed out) waiting for.*(RPC|reply|response)"
-    action: MONITOR
+    action: OPS_WATCH
     difficulty: easy
     description: "일시적 RPC 타임아웃 → 추이 모니터링"
     log_text: "Timeout waiting for RPC reply from nova-conductor after 30.5s, will retry"
 
   - id: SCN-021
     pattern_regex: "connection (retrying|retry [0-9]+/[0-9]+).*after.*second"
-    action: MONITOR
+    action: OPS_WATCH
     difficulty: easy
     description: "연결 재시도 중 — 일시적 흔들림 가능성, 모니터링"
     log_text: "connection retry 2/5 to rabbitmq after 5 second backoff, intermittent connectivity"
 
   - id: SCN-034
     pattern_regex: "heat.*stack.*(create|update).*(timeout|failed|rollback)"
-    action: MONITOR
+    action: OPS_WATCH
     difficulty: medium
     hold_out: true
     description: "Heat 스택 생성/업데이트 타임아웃 → 추이 모니터링"
@@ -217,28 +217,28 @@ scenarios:
   # ── INVESTIGATE (5) — 원인 불명, 능동 분석 필요 ──────────────────────
   - id: SCN-020
     pattern_regex: "WARN.*(slow|high latency|degraded).*(network|io|storage)"
-    action: INVESTIGATE
+    action: OPS_DEEP
     difficulty: medium
     description: "성능 저하 경고 → 원인 조사 필요"
     log_text: "WARN slow network io detected, high latency on storage backend, performance degraded"
 
   - id: SCN-022
     pattern_regex: "neutron.*(port|network).*(flapping|unstable|intermittent)"
-    action: INVESTIGATE
+    action: OPS_DEEP
     difficulty: medium
     description: "네트워크 포트 불안정 → 원인 능동 조사"
     log_text: "neutron port flapping detected on network, link unstable intermittent packet loss observed"
 
   - id: SCN-023
     pattern_regex: "nova.api.*response time.*(high|elevated)|api.*latency.*[0-9]{4,}ms"
-    action: INVESTIGATE
+    action: OPS_DEEP
     difficulty: medium
     description: "API 응답 지연 → 원인 조사"
     log_text: "nova.api response time high, elevated latency 5200ms on GET /v2/servers endpoint"
 
   - id: SCN-037
     pattern_regex: "octavia.*(amphora|loadbalancer).*(health.*fail|unreachable|ERROR)"
-    action: INVESTIGATE
+    action: OPS_DEEP
     difficulty: medium
     hold_out: true
     description: "Octavia 로드밸런서 헬스 모니터 이상 → 원인 조사"
@@ -246,7 +246,7 @@ scenarios:
 
   - id: SCN-045
     pattern_regex: "nova.api.*500.*Internal Server Error.*intermittent|service.*sporadic.*error"
-    action: INVESTIGATE
+    action: OPS_DEEP
     difficulty: hard
     description: "간헐적 API 500 오류 → 원인 불명, 능동 분석"
     log_text: "nova.api intermittent 500 Internal Server Error on POST /v2/servers, sporadic failure no clear cause"
@@ -254,21 +254,21 @@ scenarios:
   # ── SECURITY_ESCALATE (3) — 보안팀 에스컬레이션 ──────────────────────
   - id: SCN-024
     pattern_regex: "Authentication (failure|failed|error).*[3-9] times|Unauthorized.*keystone"
-    action: SECURITY_ESCALATE
+    action: SEC_TEAM
     difficulty: hard
     description: "인증 반복 실패 → 보안팀 에스컬레이션 (침해 의심)"
     log_text: "Authentication failure for user admin 5 times from 192.168.1.100, Unauthorized keystone access"
 
   - id: SCN-027
     pattern_regex: "security.*violation|intrusion.*(detected|attempt)|unauthorized.*root"
-    action: SECURITY_ESCALATE
+    action: SEC_TEAM
     difficulty: hard
     description: "보안 위반 감지 → 보안팀 에스컬레이션"
     log_text: "security violation detected, intrusion attempt on management network, unauthorized root access"
 
   - id: SCN-043
     pattern_regex: "ssl.*certificate.*(expired|invalid|verification failed)|tls.*handshake.*fail"
-    action: SECURITY_ESCALATE
+    action: SEC_TEAM
     difficulty: hard
     description: "SSL 인증서 만료/TLS 핸드쉐이크 실패 → 보안팀 에스컬레이션"
     log_text: "ssl certificate expired for keystone endpoint, tls handshake fail on nova-api, certificate verification failed"
@@ -276,21 +276,21 @@ scenarios:
   # ── STORAGE_ESCALATE (4) — 스토리지 전담팀 에스컬레이션 ─────────────
   - id: SCN-029
     pattern_regex: "data.*(loss|corruption|integrity check failed)"
-    action: STORAGE_ESCALATE
+    action: STORAGE_TEAM
     difficulty: hard
     description: "데이터 손실/무결성 오류 → 스토리지팀 에스컬레이션"
     log_text: "data loss detected on volume vol-00123, corruption confirmed integrity check failed for block device"
 
   - id: SCN-031
     pattern_regex: "swift.*account.*server.*(unavailable|connection refused)|object.*storage.*unreachable"
-    action: STORAGE_ESCALATE
+    action: STORAGE_TEAM
     difficulty: hard
     description: "Swift 오브젝트 스토리지 불가 → 스토리지팀 에스컬레이션"
     log_text: "swift account server unavailable on node storage-01, object storage unreachable, connection refused"
 
   - id: SCN-033
     pattern_regex: "ceph.*osd.*(down|out|unavailable)|ceph.*health.*HEALTH_ERR"
-    action: STORAGE_ESCALATE
+    action: STORAGE_TEAM
     difficulty: hard
     hold_out: true
     description: "Ceph OSD 다운 / 클러스터 HEALTH_ERR → 스토리지팀 에스컬레이션"
@@ -298,7 +298,7 @@ scenarios:
 
   - id: SCN-035
     pattern_regex: "glance.*image.*(corrupt|checksum.*mismatch|integrity.*failed)"
-    action: STORAGE_ESCALATE
+    action: STORAGE_TEAM
     difficulty: hard
     hold_out: true
     description: "Glance 이미지 무결성 오류 → 스토리지팀 에스컬레이션"
@@ -307,28 +307,28 @@ scenarios:
   # ── ESCALATE (4) — 일반 심각 장애, 온콜 에스컬레이션 ─────────────────
   - id: SCN-025
     pattern_regex: "CRITICAL.*database.*(corrupt|unreachable|unavailable)"
-    action: ESCALATE
+    action: ON_CALL
     difficulty: hard
     description: "DB 심각 오류 → 즉시 온콜 에스컬레이션"
     log_text: "CRITICAL nova database corrupt and unreachable, primary DB unavailable failover failed"
 
   - id: SCN-026
     pattern_regex: "kernel.*(panic|oops|BUG:|WARNING.*hardware)"
-    action: ESCALATE
+    action: ON_CALL
     difficulty: hard
     description: "커널 패닉 / 하드웨어 오류 → 온콜 에스컬레이션"
     log_text: "kernel panic detected on compute-05, BUG: soft lockup WARNING hardware memory error"
 
   - id: SCN-028
     pattern_regex: "nova.compute.*CRITICAL.*multiple hosts.*(down|unreachable)"
-    action: ESCALATE
+    action: ON_CALL
     difficulty: hard
     description: "다수 컴퓨트 호스트 동시 다운 → 온콜 에스컬레이션"
     log_text: "nova.compute CRITICAL multiple hosts down unreachable, 5 compute nodes simultaneously unavailable"
 
   - id: SCN-030
     pattern_regex: "SLA.*breach|incident.*P[12].*sev(erity)?.*[12]"
-    action: ESCALATE
+    action: ON_CALL
     difficulty: hard
     description: "SLA 위반 / P1-P2 인시던트 → 즉시 온콜 에스컬레이션"
     log_text: "SLA breach confirmed, incident P1 severity 1 declared, immediate escalation required"

@@ -13,18 +13,19 @@ from db.models import LLMSettings
 logger = logging.getLogger(__name__)
 
 ACTIONS = {
-    "MONITOR", "INVESTIGATE",
-    "AGENT_RESTART", "DEPENDENCY_RESTART",
-    "RESOURCE_CHECK", "QUOTA_ADJUST",
-    "RESCHEDULE",
-    "STORAGE_ESCALATE", "SECURITY_ESCALATE", "ESCALATE",
+    "OPS_WATCH", "OPS_DEEP",
+    "SVC_TEAM_A", "SVC_TEAM_B",
+    "INFRA_TEAM", "TENANT_OPS",
+    "COMPUTE_OPS",
+    "STORAGE_TEAM", "SEC_TEAM", "ON_CALL",
 }
 
-_SYSTEM_RECOMMEND = """You are an OpenStack operations system. Classify the log into exactly one action code.
+_SYSTEM_RECOMMEND = """You are a ticket routing system. Route the log to exactly one team code.
 
-Action codes: MONITOR | INVESTIGATE | AGENT_RESTART | DEPENDENCY_RESTART | RESOURCE_CHECK | QUOTA_ADJUST | RESCHEDULE | STORAGE_ESCALATE | SECURITY_ESCALATE | ESCALATE
+Team codes: OPS_WATCH | OPS_DEEP | SVC_TEAM_A | SVC_TEAM_B | INFRA_TEAM | TENANT_OPS | COMPUTE_OPS | STORAGE_TEAM | SEC_TEAM | ON_CALL
 
-Use the similar past cases below as the PRIMARY basis for your decision. Match the pattern and action of the closest case.
+Use the similar past cases below as the ONLY basis for routing. Match the pattern and team code of the closest case.
+Without similar cases you cannot determine the correct team — output OPS_WATCH as fallback.
 
 Reply with a single JSON line only:
 {"action":"<one of 10>","confidence":<0-100>,"reason":"<one line>"}"""
@@ -128,7 +129,7 @@ async def recommend(
         return action, confidence, reason, backend
     except Exception as e:
         logger.warning("JSON 파싱 실패 (%s). fallback → top-1 유사 사례", e)
-        fallback_action = similar_cases[0]["action"] if similar_cases else "MONITOR"
+        fallback_action = similar_cases[0]["action"] if similar_cases else "OPS_WATCH"
         return fallback_action, 40, f"LLM parse error — fallback from similar case. raw={raw[:100]}", backend
 
 

@@ -31,7 +31,7 @@ class Scenario(Base):
     pattern_regex = Column(Text, default="")
     log_text = Column(Text, default="")
     drain_template = Column(Text, default="")
-    action = Column(String(20), nullable=False)   # MONITOR|RESOURCE_CHECK|AGENT_RESTART|RESCHEDULE|ESCALATE
+    action = Column(String(20), nullable=False)   # OPS_WATCH|OPS_DEEP|SVC_TEAM_A|SVC_TEAM_B|INFRA_TEAM|TENANT_OPS|COMPUTE_OPS|STORAGE_TEAM|SEC_TEAM|ON_CALL
     difficulty = Column(String(10), default="medium")   # easy|medium|hard
     description = Column(Text, default="")
     is_gold = Column(Boolean, default=False)

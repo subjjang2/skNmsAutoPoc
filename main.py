@@ -309,9 +309,9 @@ async def approve_incident(incident_id: str, db: AsyncSession = Depends(get_db))
 
 @app.post("/api/incidents/{incident_id}/reject")
 async def reject_incident(incident_id: str, req: RejectRequest, db: AsyncSession = Depends(get_db)):
-    if req.action not in {"MONITOR", "INVESTIGATE", "AGENT_RESTART", "DEPENDENCY_RESTART",
-                          "RESOURCE_CHECK", "QUOTA_ADJUST", "RESCHEDULE",
-                          "STORAGE_ESCALATE", "SECURITY_ESCALATE", "ESCALATE"}:
+    if req.action not in {"OPS_WATCH", "OPS_DEEP", "SVC_TEAM_A", "SVC_TEAM_B",
+                          "INFRA_TEAM", "TENANT_OPS", "COMPUTE_OPS",
+                          "STORAGE_TEAM", "SEC_TEAM", "ON_CALL"}:
         raise HTTPException(400, f"invalid action: {req.action}")
 
     row = await db.execute(
