@@ -4,9 +4,10 @@ evaluate(db, test_set) → {match_rate, correct, total, detail}
 test_set rows: {id, raw_log, action, difficulty, scenario_id}
 """
 import logging
+import random
 from collections import defaultdict
 from sqlalchemy.ext.asyncio import AsyncSession
-from analyzer.llm_client import recommend, embed_texts
+from analyzer.llm_client import recommend, embed_texts, ACTIONS
 from pipeline.vector_store import search_similar
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ async def evaluate(db: AsyncSession, test_set: list[dict]) -> dict:
             pred_action, _, _, _ = await recommend(db, raw_log, drain_template, similar)
         except Exception as e:
             logger.warning("Eval item %s failed: %s", item.get("id"), e)
-            pred_action = "OPS_WATCH"  # safe default (exception path only)
+            pred_action = random.choice(list(ACTIONS))  # exception path: random baseline
 
         if pred_action == gold_action:
             correct += 1
