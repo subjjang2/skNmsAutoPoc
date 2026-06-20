@@ -46,9 +46,11 @@ def _label_lines(lines: list[str], patterns: list[dict]) -> list[dict]:
 
 
 def _synthetic_rows_from_scenarios(patterns: list[dict], n_per: int = 30) -> list[dict]:
-    """scenarios.yaml log_text augmentation → 합성 라벨 데이터. CSV 매치 0건일 때 폴백."""
+    """scenarios.yaml log_text augmentation → 합성 라벨 데이터. hold_out 시나리오 제외."""
     rows = []
     for s in patterns:
+        if s.get("hold_out", False):
+            continue  # hold_out 시나리오는 train_pool에 포함하지 않음
         base = s.get("log_text", "")
         if not base:
             continue

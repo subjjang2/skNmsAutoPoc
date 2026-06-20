@@ -81,7 +81,7 @@ async def _embed_seeded_scenarios():
     async with AsyncSessionLocal() as db:
         rows = (await db.execute(
             text("SELECT scenario_id, log_text, action, drain_template, difficulty, is_gold, is_test, source "
-                 "FROM scenarios WHERE log_text != '' AND embedding IS NULL")
+                 "FROM scenarios WHERE log_text != '' AND embedding IS NULL AND hold_out = FALSE")
         )).fetchall()
 
     if not rows:

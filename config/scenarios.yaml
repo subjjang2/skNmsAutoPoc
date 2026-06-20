@@ -235,6 +235,7 @@ scenarios:
     pattern_regex: "ceph.*osd.*(down|out|unavailable)|ceph.*health.*HEALTH_ERR"
     action: ESCALATE
     difficulty: hard
+    hold_out: true
     description: "Ceph OSD 다운 / 클러스터 HEALTH_ERR → 에스컬레이션"
     log_text: "ceph osd.3 down and out, ceph health status HEALTH_ERR, 2 osds unavailable on storage cluster"
 
@@ -242,6 +243,7 @@ scenarios:
     pattern_regex: "heat.*stack.*(create|update).*(timeout|failed|rollback)"
     action: MONITOR
     difficulty: medium
+    hold_out: true
     description: "Heat 스택 생성/업데이트 타임아웃 → 추이 모니터링"
     log_text: "heat stack create timeout after 1800s, stack update failed initiating rollback on tenant stack"
 
@@ -249,6 +251,7 @@ scenarios:
     pattern_regex: "glance.*image.*(corrupt|checksum.*mismatch|integrity.*failed)"
     action: ESCALATE
     difficulty: hard
+    hold_out: true
     description: "Glance 이미지 무결성 오류 → 에스컬레이션"
     log_text: "glance image corrupt detected, checksum mismatch on image uuid abc123, integrity check failed"
 
@@ -256,6 +259,7 @@ scenarios:
     pattern_regex: "ironic.*(node|baremetal).*(provision.*failed|deploy.*error|unreachable)"
     action: RESCHEDULE
     difficulty: hard
+    hold_out: true
     description: "Ironic 베어메탈 프로비저닝 실패 → 다른 노드로 재스케줄"
     log_text: "ironic node baremetal-07 provision failed, deploy error during PXE boot, node unreachable after IPMI"
 
@@ -263,6 +267,7 @@ scenarios:
     pattern_regex: "octavia.*(amphora|loadbalancer).*(health.*fail|unreachable|ERROR)"
     action: MONITOR
     difficulty: medium
+    hold_out: true
     description: "Octavia 로드밸런서 헬스 모니터 이상 → 모니터링"
     log_text: "octavia amphora health monitor failure, loadbalancer lb-00456 ERROR state, amphora unreachable"
 
@@ -270,13 +275,15 @@ scenarios:
     pattern_regex: "magnum.*(cluster|node).*(unreachable|NotReady|failed to join)"
     action: RESCHEDULE
     difficulty: hard
+    hold_out: true
     description: "Magnum 컨테이너 클러스터 노드 이탈 → 재스케줄"
     log_text: "magnum cluster worker node unreachable, node NotReady status, failed to join kubernetes cluster"
 
   - id: SCN-039
     pattern_regex: "nova.*(console|vnc|spice).*(unavailable|connection.*refused|proxy.*error)"
     action: AGENT_RESTART
-    difficulty: easy
+    difficulty: hard
+    hold_out: true
     description: "Nova 콘솔 프록시 연결 불가 → 프록시 재시작"
     log_text: "nova vnc console unavailable, novncproxy connection refused on port 6080, console proxy error"
 
@@ -284,5 +291,6 @@ scenarios:
     pattern_regex: "designate.*(dns|zone|record).*(sync.*failed|backend.*error|timeout)"
     action: AGENT_RESTART
     difficulty: medium
+    hold_out: true
     description: "Designate DNS 백엔드 동기화 실패 → 에이전트 재시작"
     log_text: "designate dns zone sync failed, backend error communicating with BIND9, record update timeout"

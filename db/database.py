@@ -70,6 +70,10 @@ async def init_db():
             "ALTER TABLE llm_settings ADD COLUMN IF NOT EXISTS dgx_embed_model VARCHAR(100) DEFAULT 'Qwen2.5-14B'",
             "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS is_test BOOLEAN DEFAULT FALSE",
             "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS alt_logs JSONB DEFAULT '[]'",
+            "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS hold_out BOOLEAN DEFAULT FALSE",
+            # hold_out 시나리오 임베딩 초기화 (시드에서 제거)
+            "UPDATE scenarios SET embedding = NULL, hold_out = TRUE WHERE scenario_id IN "
+            "('SCN-033','SCN-034','SCN-035','SCN-036','SCN-037','SCN-038','SCN-039','SCN-040')",
         ]:
             await conn.execute(text(stmt))
 
@@ -107,6 +111,7 @@ async def init_db():
                         source="normal",
                         is_gold=False,
                         is_test=False,
+                        hold_out=s.get("hold_out", False),
                     ))
             await session.commit()
 

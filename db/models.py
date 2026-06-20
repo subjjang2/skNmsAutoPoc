@@ -39,6 +39,7 @@ class Scenario(Base):
     is_test = Column(Boolean, default=False)        # True → pgvector 검색 제외
     embedding = Column(Vector(_EMBED_DIM), nullable=True)
     alt_logs = Column(JSON, default=list)
+    hold_out = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
