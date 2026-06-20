@@ -12,15 +12,32 @@ from db.models import LLMSettings
 
 logger = logging.getLogger(__name__)
 
-ACTIONS = {"MONITOR", "RESOURCE_CHECK", "AGENT_RESTART", "RESCHEDULE", "ESCALATE"}
+ACTIONS = {
+    "MONITOR", "INVESTIGATE",
+    "AGENT_RESTART", "DEPENDENCY_RESTART",
+    "RESOURCE_CHECK", "QUOTA_ADJUST",
+    "RESCHEDULE",
+    "STORAGE_ESCALATE", "SECURITY_ESCALATE", "ESCALATE",
+}
 
-_SYSTEM_RECOMMEND = """You are an infrastructure operations expert.
-Given a log line and similar past cases, choose exactly one action.
+_SYSTEM_RECOMMEND = """You are an OpenStack infrastructure operations expert.
+Given a log line and similar past cases, choose exactly ONE action from the 10 below.
 
-Choices: MONITOR | RESOURCE_CHECK | AGENT_RESTART | RESCHEDULE | ESCALATE
+- MONITOR: transient blip, auto-recovers (retries, will-retry). Watch only.
+- INVESTIGATE: cause unclear, no auto-recovery. Active log/metric analysis needed (latency, flapping, degraded).
+- AGENT_RESTART: OpenStack service agent unresponsive/crashed (nova-compute, neutron/cinder/glance-agent, keystone, dhcp, designate).
+- DEPENDENCY_RESTART: underlying dependency down (libvirt, rabbitmq/oslo.messaging, hypervisor, vnc/console proxy).
+- RESOURCE_CHECK: physical resource shortage on host (RAM, vcpu, disk, OOM, CPU throttling).
+- QUOTA_ADJUST: tenant/project quota or limit exceeded (not physical shortage).
+- RESCHEDULE: instance/node placement failed; move to another host (affinity, live-migration, ironic, magnum).
+- STORAGE_ESCALATE: storage-layer integrity/availability failure → storage team (Ceph, Swift, Glance corruption, data loss).
+- SECURITY_ESCALATE: security/auth incident → security team (repeated auth failure, intrusion, SSL/TLS, unauthorized root).
+- ESCALATE: severe general outage → on-call (DB corrupt, kernel panic, multiple hosts down, SLA/P1 breach).
+
+Use similar past cases as strong hints. Prefer the most specific action.
 
 Reply with a single JSON line only:
-{"action":"<one of 5>","confidence":<0-100>,"reason":"<one line>"}"""
+{"action":"<one of 10>","confidence":<0-100>,"reason":"<one line>"}"""
 
 
 async def _get_settings(db: AsyncSession) -> LLMSettings:

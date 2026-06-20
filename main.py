@@ -309,7 +309,9 @@ async def approve_incident(incident_id: str, db: AsyncSession = Depends(get_db))
 
 @app.post("/api/incidents/{incident_id}/reject")
 async def reject_incident(incident_id: str, req: RejectRequest, db: AsyncSession = Depends(get_db)):
-    if req.action not in {"MONITOR", "RESOURCE_CHECK", "AGENT_RESTART", "RESCHEDULE", "ESCALATE"}:
+    if req.action not in {"MONITOR", "INVESTIGATE", "AGENT_RESTART", "DEPENDENCY_RESTART",
+                          "RESOURCE_CHECK", "QUOTA_ADJUST", "RESCHEDULE",
+                          "STORAGE_ESCALATE", "SECURITY_ESCALATE", "ESCALATE"}:
         raise HTTPException(400, f"invalid action: {req.action}")
 
     row = await db.execute(
@@ -513,7 +515,7 @@ async def eval_curve(run_id: str | None = None, db: AsyncSession = Depends(get_d
         q = q.where(EvalResult.run_id == run_id)
     rows = (await db.execute(q)).scalars().all()
 
-    majority_baseline = 35  # MONITOR 다수 클래스 추정 기준선
+    majority_baseline = 16  # RESCHEDULE 7/45 = 15.6% — 최다 클래스 기준선
 
     return {
         "run_id": rows[0].run_id if rows else run_id,

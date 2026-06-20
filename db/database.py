@@ -74,6 +74,8 @@ async def init_db():
             # hold_out 시나리오 임베딩 초기화 (시드에서 제거)
             "UPDATE scenarios SET embedding = NULL, hold_out = TRUE WHERE scenario_id IN "
             "('SCN-033','SCN-034','SCN-035','SCN-036','SCN-037','SCN-038','SCN-039','SCN-040')",
+            # 액션 10개 재설계 후 구버전 synth_gold 삭제 (action 라벨 불일치)
+            "DELETE FROM scenarios WHERE source = 'synth_gold'",
         ]:
             await conn.execute(text(stmt))
 
@@ -97,10 +99,11 @@ async def init_db():
         if yaml_path.exists():
             data = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
             for s in data.get("scenarios", []):
-                exists = await session.execute(
+                result = await session.execute(
                     select(Scenario).where(Scenario.scenario_id == s["id"])
                 )
-                if not exists.scalar_one_or_none():
+                row = result.scalar_one_or_none()
+                if not row:
                     session.add(Scenario(
                         scenario_id=s["id"],
                         pattern_regex=s.get("pattern_regex", ""),
@@ -113,6 +116,11 @@ async def init_db():
                         is_test=False,
                         hold_out=s.get("hold_out", False),
                     ))
+                else:
+                    # action 라벨 변경 반영 (시나리오 재설계 시 업데이트)
+                    row.action = s["action"]
+                    row.difficulty = s.get("difficulty", row.difficulty)
+                    row.hold_out = s.get("hold_out", False)
             await session.commit()
 
     print("DB 초기화 완료 (pgvector enabled)")
