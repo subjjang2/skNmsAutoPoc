@@ -16,8 +16,12 @@ async def search_similar(
     vector: list[float],
     k: int = 5,
     exclude_test: bool = True,
+    exclude_seeds: bool = False,
 ) -> list[dict]:
-    """코사인 유사도 top-k 반환. exclude_test=True → is_test=false 행만."""
+    """코사인 유사도 top-k 반환.
+    exclude_test=True  → is_test=false 행만
+    exclude_seeds=True → SCN-* 시드 행 제외 (실험 평가 전용)
+    """
     vec_str = _vec_literal(vector)
     rows = await db.execute(
         text("""
@@ -26,10 +30,13 @@ async def search_similar(
             FROM scenarios
             WHERE embedding IS NOT NULL
               AND (:include_test OR is_test = false)
+              AND (NOT :exclude_seeds OR scenario_id NOT LIKE 'SCN-%')
             ORDER BY embedding <=> CAST(:vec AS vector)
             LIMIT :k
         """),
-        {"vec": vec_str, "k": k, "include_test": not exclude_test},
+        {"vec": vec_str, "k": k,
+         "include_test": not exclude_test,
+         "exclude_seeds": exclude_seeds},
     )
     return [dict(r._mapping) for r in rows.fetchall()]
 

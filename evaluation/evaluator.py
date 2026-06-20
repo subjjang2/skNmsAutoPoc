@@ -31,7 +31,7 @@ async def evaluate(db: AsyncSession, test_set: list[dict]) -> dict:
             drain_result = drain_add(raw_log)
             drain_template = drain_result.get("template", raw_log)
             vecs = await embed_texts(db, [drain_template + " " + raw_log])
-            similar = await search_similar(db, vecs[0], k=5, exclude_test=True)
+            similar = await search_similar(db, vecs[0], k=5, exclude_test=True, exclude_seeds=True)
             pred_action, _, _, _ = await recommend(db, raw_log, drain_template, similar)
         except Exception as e:
             logger.warning("Eval item %s failed: %s", item.get("id"), e)
