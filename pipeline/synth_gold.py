@@ -26,49 +26,55 @@ def _load_scenarios(difficulties=("hard", "medium")) -> list[dict]:
     return [s for s in data.get("scenarios", []) if s.get("difficulty") in difficulties]
 
 
-async def _generate_batch(db, scenario: dict, n: int) -> list[str]:
-    """n건 요청 단일 LLM 호출. 실패 시 빈 리스트."""
+def _extract_json_array(raw: str) -> list:
+    """<think> 블록 제거 후 JSON 배열 추출. 마지막 [...] 우선."""
+    # Qwen3 thinking 태그 제거
+    cleaned = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
+    # 마지막 [...] 블록 찾기 (greedy → 가장 넓은 범위)
+    m = re.search(r'\[.*\]', cleaned, re.DOTALL)
+    if not m:
+        raise ValueError(f"JSON 배열 없음. 원문: {cleaned[:200]}")
+    return json.loads(m.group())
+
+
+async def _generate_batch(db, scenario: dict, n: int) -> tuple[list[str], str | None]:
+    """n건 요청 단일 LLM 호출. (결과, 에러) 반환."""
     from analyzer.llm_client import analyze
-    system = "You are an OpenStack log generator. Output JSON array only, no explanation."
+    system = "/no_think You are an OpenStack log generator. Output JSON array only, no explanation, no thinking."
     prompt = (
         f"Scenario: {scenario.get('description', '')}\n"
-        f"Action: {scenario['action']}\n"
-        f"Reference (avoid reusing): {scenario.get('log_text', '')}\n\n"
-        f"Generate exactly {n} OpenStack log lines for this failure.\n"
-        f"- Different vocabulary and component names from reference\n"
-        f"- Include hostnames, UUIDs, IPs\n"
-        f"- Do NOT include '{scenario['action']}' in the text\n"
-        f'Output ONLY a JSON array: ["log1","log2",...]'
+        f"Action needed: {scenario['action']}\n"
+        f"Reference log: {scenario.get('log_text', '')}\n\n"
+        f"Generate exactly {n} OpenStack error log lines for this failure.\n"
+        f"Rules: different vocabulary from reference, include hostnames/UUIDs/IPs.\n"
+        f'Output ONLY valid JSON array: ["log1","log2",...]'
     )
     try:
         raw, _ = await analyze(db, system, prompt, max_tokens=1024)
-        m = re.search(r'\[.*\]', raw, re.DOTALL)
-        if not m:
-            return []
-        items = json.loads(m.group())
-        return [str(x).strip() for x in items if str(x).strip()][:n]
-    except Exception:
-        return []
+        items = _extract_json_array(raw)
+        return [str(x).strip() for x in items if str(x).strip()][:n], None
+    except Exception as e:
+        return [], f"{type(e).__name__}: {str(e)[:120]}"
 
 
 async def _generate_variants(db, scenario: dict, n: int) -> tuple[list[str], str | None]:
-    """n건을 BATCH_SIZE씩 나눠서 호출 — 한 번에 많이 요청하면 토큰 초과로 JSON 잘림."""
+    """n건을 BATCH_SIZE씩 나눠서 호출."""
     BATCH_SIZE = 10
     results: list[str] = []
-    errors: list[str] = []
+    last_err: str | None = None
 
     remaining = n
     while remaining > 0:
         batch_n = min(BATCH_SIZE, remaining)
-        batch = await _generate_batch(db, scenario, batch_n)
+        batch, err = await _generate_batch(db, scenario, batch_n)
         if batch:
             results.extend(batch)
-        else:
-            errors.append(f"배치 실패 (요청 {batch_n}건)")
+        if err:
+            last_err = err
         remaining -= batch_n
 
-    if not results and errors:
-        return [], errors[0]
+    if not results:
+        return [], last_err or "모든 배치 실패"
     return results, None
 
 
