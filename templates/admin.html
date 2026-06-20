@@ -55,11 +55,11 @@
   .scn-header:hover { background: rgba(255,255,255,.04); }
   .scn-id { font-family: monospace; font-size: 11px; color: var(--muted); min-width: 60px; }
   .scn-action { font-size: 11px; padding: 2px 7px; border-radius: 4px; font-weight: 600; }
-  .action-AGENT_RESTART { background: rgba(88,166,255,.15); color: #58a6ff; }
-  .action-RESOURCE_CHECK { background: rgba(210,153,34,.15); color: #d29922; }
-  .action-RESCHEDULE { background: rgba(63,185,80,.15); color: #3fb950; }
-  .action-MONITOR { background: rgba(139,148,158,.15); color: #8b949e; }
-  .action-ESCALATE { background: rgba(248,81,73,.15); color: #f85149; }
+  .action-SVC_TEAM_A, .action-SVC_TEAM_B { background: rgba(88,166,255,.15); color: #58a6ff; }
+  .action-INFRA_TEAM, .action-TENANT_OPS { background: rgba(210,153,34,.15); color: #d29922; }
+  .action-COMPUTE_OPS { background: rgba(63,185,80,.15); color: #3fb950; }
+  .action-OPS_WATCH, .action-OPS_DEEP { background: rgba(139,148,158,.15); color: #8b949e; }
+  .action-ON_CALL, .action-SEC_TEAM, .action-STORAGE_TEAM { background: rgba(248,81,73,.15); color: #f85149; }
   .scn-desc { font-size: 12px; flex: 1; }
   .alt-badge { font-size: 11px; color: var(--muted); margin-left: auto; }
   .alt-badge.has-alt { color: var(--green); }
@@ -143,9 +143,17 @@
       <span>합성 골드 데이터 <span id="gold-count" style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;"></span></span>
       <button class="btn-primary" style="padding:5px 12px;font-size:12px;" onclick="generateGold()" id="gen-gold-btn">Gold 생성</button>
     </div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">
-      hard/medium 시나리오를 LLM이 다른 표현으로 증강 → 실험 gold step(800/100·300·600)에 사용.<br>
-      생성 후 <strong>실험 실행</strong>하면 gold 추가 시 정확도 변화 확인 가능.
+    <div style="font-size:12px;color:var(--text);margin-bottom:10px;line-height:1.6;background:rgba(88,166,255,.06);border:1px solid var(--border);border-radius:6px;padding:12px;">
+      <strong style="color:var(--accent);">🚗 테슬라 자율주행에 비유하면</strong><br>
+      테슬라는 일반 주행 영상(=일반 데이터)을 수백만 시간 모읍니다. 하지만 <strong>뒤집힌 트럭, 폭우 속 신호등</strong> 같은 <strong>희귀 상황</strong>은 거의 안 잡힙니다.<br>
+      그래서 전문가가 이런 희귀 장면만 골라 정답을 단 <strong style="color:var(--green);">정제 데이터(Gold)</strong>를 따로 만듭니다. 자율주행의 안전은 이 Gold가 좌우합니다.
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.6;">
+      이 프로젝트의 <strong>희귀 장애 8종(hold_out)</strong> = 뒤집힌 트럭.<br>
+      • <strong>일반 학습 데이터(train)</strong>에는 이 8종이 <strong style="color:var(--red);">없습니다</strong> → AI가 처음 보면 못 맞춤<br>
+      • <strong style="color:var(--green);">Gold 데이터</strong>에만 이 8종의 정답이 들어갑니다<br>
+      → 실험에서 Gold를 넣기 전(800/0)은 낮고, Gold를 넣은 뒤(800/100·300·600)는 <strong>정답률 급상승</strong>.<br>
+      이것이 <strong>"정제 데이터가 AI를 똑똑하게 만든다"</strong>는 증거입니다.
     </div>
     <div id="gold-status" style="font-size:12px;color:var(--muted);">로딩 중...</div>
   </div>
