@@ -454,6 +454,23 @@ async def gold_status(db: AsyncSession = Depends(get_db)):
     }
 
 
+@app.get("/api/gold/test")
+async def gold_test(db: AsyncSession = Depends(get_db)):
+    """LLM 연결 테스트 — 시나리오 1개 5건 생성 시도."""
+    from analyzer.llm_client import analyze
+    try:
+        raw, backend = await analyze(
+            db,
+            "You are an OpenStack log generator. Output JSON array only.",
+            'Generate 3 short OpenStack error log lines. Output JSON array only: ["log1","log2","log3"]'
+        )
+        m = __import__("re").search(r'\[.*\]', raw, __import__("re").DOTALL)
+        parsed = __import__("json").loads(m.group()) if m else None
+        return {"ok": True, "backend": backend, "raw": raw[:300], "parsed_count": len(parsed) if parsed else 0}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "type": type(e).__name__}
+
+
 @app.post("/api/eval/run", status_code=202)
 async def start_eval(req: EvalRunRequest):
     from evaluation.experiment import run_experiment
