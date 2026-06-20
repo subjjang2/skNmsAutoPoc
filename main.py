@@ -33,6 +33,7 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 _bg_tasks: set[asyncio.Task] = set()
 _drain_call_count = 0
+_gold_status: dict = {"running": False, "error": None, "count": 0}
 
 
 async def _save_drain_state() -> None:
@@ -395,12 +396,20 @@ async def generate_gold(per_scenario: int = 30):
     """합성 골드 데이터 생성 — hard/medium 시나리오 LLM paraphrase."""
     from pipeline.synth_gold import generate as _gen_gold
 
+    _gold_status["running"] = True
+    _gold_status["error"] = None
+    _gold_status["count"] = 0
+
     async def _run():
         try:
             rows = await _gen_gold(n_per=per_scenario)
+            _gold_status["count"] = len(rows)
             logger.info("Gold 데이터 생성 완료: %d건", len(rows))
         except Exception as e:
+            _gold_status["error"] = str(e)
             logger.error("Gold 생성 실패: %s", e, exc_info=True)
+        finally:
+            _gold_status["running"] = False
 
     task = asyncio.create_task(_run())
     _bg_tasks.add(task)
@@ -420,7 +429,14 @@ async def gold_status(db: AsyncSession = Depends(get_db)):
     )).scalar() or 0
 
     total = file_count or db_count
-    return {"exists": total > 0, "count": total, "file_count": file_count, "db_count": db_count}
+    return {
+        "exists": total > 0,
+        "count": total,
+        "file_count": file_count,
+        "db_count": int(db_count),
+        "running": _gold_status["running"],
+        "error": _gold_status["error"],
+    }
 
 
 @app.post("/api/eval/run", status_code=202)

@@ -400,9 +400,15 @@ async function loadGoldStatus() {
   try {
     const d = await fetch('/api/gold/status').then(r => r.json());
     document.getElementById('gold-count').textContent = d.exists ? `(${d.count}건)` : '(없음)';
-    document.getElementById('gold-status').innerHTML = d.exists
-      ? `<span style="color:var(--green);">✔ gold_pool.json ${d.count}건 — 실험 실행 시 gold step 자동 사용</span>`
-      : `<span style="color:var(--muted);">아직 없음 — Gold 생성 버튼 클릭</span>`;
+    if (d.running) {
+      document.getElementById('gold-status').innerHTML = '<span style="color:var(--yellow);">LLM 호출 중... 잠시 후 새로고침</span>';
+    } else if (d.error) {
+      document.getElementById('gold-status').innerHTML = `<span style="color:var(--red);">생성 실패: ${d.error}</span>`;
+    } else {
+      document.getElementById('gold-status').innerHTML = d.exists
+        ? `<span style="color:var(--green);">✔ ${d.count}건 (파일: ${d.file_count}, DB: ${d.db_count}) — 실험 실행 시 gold step 자동 사용</span>`
+        : `<span style="color:var(--muted);">아직 없음 — Gold 생성 버튼 클릭</span>`;
+    }
   } catch(e) {
     document.getElementById('gold-status').innerHTML = `<span style="color:var(--red);">${e.message}</span>`;
   }
@@ -414,21 +420,38 @@ async function generateGold() {
   document.getElementById('gold-status').innerHTML = '<span style="color:var(--yellow);">LLM 호출 중 (백그라운드, 수분 소요)...</span>';
   try {
     await fetch('/api/gold/generate', {method:'POST'});
-    let tries = 0;
-    const poll = setInterval(async () => {
-      tries++;
+    let startTime = Date.now();
+    let poll;
+    const checkStatus = async () => {
       const d = await fetch('/api/gold/status').then(r => r.json());
-      if (d.exists && d.count > 0) {
+      if (d.error) {
+        clearInterval(poll);
+        btn.textContent = 'Gold 생성'; btn.disabled = false;
+        document.getElementById('gold-status').innerHTML =
+          `<span style="color:var(--red);">생성 실패: ${d.error}</span>`;
+        return;
+      }
+      if (d.exists && d.count > 0 && !d.running) {
         clearInterval(poll);
         document.getElementById('gold-count').textContent = `(${d.count}건)`;
         document.getElementById('gold-status').innerHTML = `<span style="color:var(--green);">✔ 완료: ${d.count}건 생성됨</span>`;
         btn.textContent = 'Gold 생성'; btn.disabled = false;
-      } else if (tries > 60) {
-        clearInterval(poll);
-        btn.textContent = 'Gold 생성'; btn.disabled = false;
-        document.getElementById('gold-status').innerHTML = '<span style="color:var(--red);">타임아웃 — 서버 로그 확인</span>';
+      } else {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const min = Math.floor(elapsed / 60), sec = elapsed % 60;
+        const elapsedTotal = Date.now() - startTime;
+        if (elapsedTotal > 7200000) {
+          clearInterval(poll);
+          btn.textContent = 'Gold 생성'; btn.disabled = false;
+          document.getElementById('gold-status').innerHTML = '<span style="color:var(--red);">타임아웃 (120분) — 서버 로그 확인</span>';
+        } else {
+          document.getElementById('gold-status').innerHTML =
+            `<span style="color:var(--yellow);">LLM 호출 중... (${min}분 ${sec}초 경과)</span>`;
+        }
       }
-    }, 5000);
+    };
+    poll = setInterval(checkStatus, 10000);
+    checkStatus();
   } catch(e) {
     btn.textContent = 'Gold 생성'; btn.disabled = false;
     document.getElementById('gold-status').innerHTML = `<span style="color:var(--red);">${e.message}</span>`;
