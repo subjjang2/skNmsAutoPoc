@@ -26,31 +26,50 @@ def _load_scenarios(difficulties=("hard", "medium")) -> list[dict]:
     return [s for s in data.get("scenarios", []) if s.get("difficulty") in difficulties]
 
 
-async def _generate_variants(db, scenario: dict, n: int) -> tuple[list[str], str | None]:
+async def _generate_batch(db, scenario: dict, n: int) -> list[str]:
+    """n건 요청 단일 LLM 호출. 실패 시 빈 리스트."""
     from analyzer.llm_client import analyze
     system = "You are an OpenStack log generator. Output JSON array only, no explanation."
     prompt = (
-        f"OpenStack failure scenario: {scenario.get('description', '')}\n"
-        f"Required action: {scenario['action']}\n"
-        f"Reference log (DO NOT reuse vocabulary): {scenario.get('log_text', '')}\n\n"
-        f"Generate {n} realistic OpenStack log messages for this exact failure.\n"
-        f"RULES:\n"
-        f"- Different vocabulary, format, and component names from the reference\n"
-        f"- Use realistic details: hostnames, UUIDs, IPs, error codes\n"
-        f"- Each from a different perspective (nova-conductor, neutron-server, syslog, etc.)\n"
-        f"- Do NOT include the action name ({scenario['action']}) in the log text\n"
-        f'Output JSON array only: ["log1", "log2", ...]'
+        f"Scenario: {scenario.get('description', '')}\n"
+        f"Action: {scenario['action']}\n"
+        f"Reference (avoid reusing): {scenario.get('log_text', '')}\n\n"
+        f"Generate exactly {n} OpenStack log lines for this failure.\n"
+        f"- Different vocabulary and component names from reference\n"
+        f"- Include hostnames, UUIDs, IPs\n"
+        f"- Do NOT include '{scenario['action']}' in the text\n"
+        f'Output ONLY a JSON array: ["log1","log2",...]'
     )
     try:
-        raw, _ = await analyze(db, system, prompt, max_tokens=4096)
+        raw, _ = await analyze(db, system, prompt, max_tokens=1024)
         m = re.search(r'\[.*\]', raw, re.DOTALL)
         if not m:
-            return [], f"JSON 파싱 실패: {raw[:120]}"
+            return []
         items = json.loads(m.group())
-        results = [str(x).strip() for x in items if str(x).strip()][:n]
-        return results, None
-    except Exception as e:
-        return [], str(e)
+        return [str(x).strip() for x in items if str(x).strip()][:n]
+    except Exception:
+        return []
+
+
+async def _generate_variants(db, scenario: dict, n: int) -> tuple[list[str], str | None]:
+    """n건을 BATCH_SIZE씩 나눠서 호출 — 한 번에 많이 요청하면 토큰 초과로 JSON 잘림."""
+    BATCH_SIZE = 10
+    results: list[str] = []
+    errors: list[str] = []
+
+    remaining = n
+    while remaining > 0:
+        batch_n = min(BATCH_SIZE, remaining)
+        batch = await _generate_batch(db, scenario, batch_n)
+        if batch:
+            results.extend(batch)
+        else:
+            errors.append(f"배치 실패 (요청 {batch_n}건)")
+        remaining -= batch_n
+
+    if not results and errors:
+        return [], errors[0]
+    return results, None
 
 
 async def generate(n_per: int = 30, on_progress=None) -> list[dict]:
