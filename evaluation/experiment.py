@@ -90,18 +90,12 @@ async def run_experiment(
             "python -m pipeline.build_dataset 먼저 실행하세요."
         )
 
-    # gold pool: synth_gold.json 우선, 없으면 train_pool 뒤쪽 슬라이스
-    gold_pool_json = _load_json(DATA_DIR / "gold_pool.json")
-    if gold_pool_json:
-        gold_pool = gold_pool_json[:600]
+    # gold pool: gold_pool.json 전용. 없으면 gold step 전부 스킵.
+    gold_pool = _load_json(DATA_DIR / "gold_pool.json")[:600]
+    if gold_pool:
         logger.info("gold_pool.json 사용: %d건", len(gold_pool))
     else:
-        _max_train = max((tc for tc, _ in steps), default=800)
-        gold_pool = train_pool[_max_train:][:600]
-        if gold_pool:
-            logger.info("train_pool 뒤쪽 gold_pool 사용: %d건", len(gold_pool))
-        else:
-            logger.warning("gold_pool 비어있음 — gold step 자동 스킵")
+        logger.warning("gold_pool.json 없음 — gold step 스킵 (관리자 페이지에서 Gold 생성 필요)")
 
     logger.info("Experiment %s: %d steps, train_pool=%d, test_set=%d, gold_pool=%d",
                 run_id, len(steps), len(train_pool), len(test_set), len(gold_pool))
@@ -119,7 +113,11 @@ async def run_experiment(
             # 2) train_pool 적재
             train_rows = train_pool[:train_count]
             if train_rows:
-                train_texts = [r["raw_log"] for r in train_rows]
+                from analyzer.drain_miner import add_log as _drain_add
+                train_texts = [
+                    _drain_add(r["raw_log"]).get("template", r["raw_log"]) + " " + r["raw_log"]
+                    for r in train_rows
+                ]
                 train_vecs = await embed_texts(db, train_texts)
                 for row, vec in zip(train_rows, train_vecs):
                     await upsert_scenario(
@@ -137,7 +135,10 @@ async def run_experiment(
             # 3) gold 적재
             gold_rows = gold_pool[:gold_count]
             if gold_rows:
-                gold_texts = [r["raw_log"] for r in gold_rows]
+                gold_texts = [
+                    _drain_add(r["raw_log"]).get("template", r["raw_log"]) + " " + r["raw_log"]
+                    for r in gold_rows
+                ]
                 gold_vecs = await embed_texts(db, gold_texts)
                 for row, vec in zip(gold_rows, gold_vecs):
                     await upsert_scenario(

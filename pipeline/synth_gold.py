@@ -43,7 +43,7 @@ async def _generate_variants(db, scenario: dict, n: int) -> list[str]:
     )
     try:
         raw, _ = await analyze(db, system, prompt)
-        m = re.search(r'\[.*?\]', raw, re.DOTALL)
+        m = re.search(r'\[.*\]', raw, re.DOTALL)
         if not m:
             return []
         items = json.loads(m.group())
@@ -77,6 +77,7 @@ async def generate(n_per: int = 30) -> list[dict]:
             logger.info("[%d/%d] %s → %d건 생성", i, len(scenarios), s["id"], len(variants))
 
     import random
+    random.seed(42)
     random.shuffle(rows)
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)

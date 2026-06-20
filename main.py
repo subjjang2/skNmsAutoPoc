@@ -607,7 +607,7 @@ async def generate_alt_logs(scenario_id: str, db: AsyncSession = Depends(get_db)
     )
     raw, _ = await analyze(db, system, prompt)
     import re as _re
-    m = _re.search(r'\[.*?\]', raw, _re.DOTALL)
+    m = _re.search(r'\[.*\]', raw, _re.DOTALL)
     if not m:
         raise HTTPException(500, f"LLM 파싱 실패: {raw[:200]}")
     try:
