@@ -53,17 +53,22 @@ async def _generate_variants(db, scenario: dict, n: int) -> list[str]:
         return []
 
 
-async def generate(n_per: int = 30) -> list[dict]:
+async def generate(n_per: int = 30, on_progress=None) -> list[dict]:
     from dotenv import load_dotenv
     load_dotenv()
     from db.database import AsyncSessionLocal
 
     scenarios = _load_scenarios(difficulties=("hard", "medium"))
-    logger.info("대상 시나리오: %d개 (hard/medium), 시나리오당 %d건", len(scenarios), n_per)
+    total = len(scenarios)
+    logger.info("대상 시나리오: %d개 (hard/medium), 시나리오당 %d건", total, n_per)
+    if on_progress:
+        on_progress(0, total, "", 0)
 
     rows: list[dict] = []
     async with AsyncSessionLocal() as db:
         for i, s in enumerate(scenarios, 1):
+            if on_progress:
+                on_progress(i - 1, total, s["id"], len(rows))
             variants = await _generate_variants(db, s, n_per)
             for j, log in enumerate(variants):
                 rows.append({
@@ -74,7 +79,9 @@ async def generate(n_per: int = 30) -> list[dict]:
                     "scenario_id": s["id"],
                     "source": "gold",
                 })
-            logger.info("[%d/%d] %s → %d건 생성", i, len(scenarios), s["id"], len(variants))
+            logger.info("[%d/%d] %s → %d건 생성", i, total, s["id"], len(variants))
+            if on_progress:
+                on_progress(i, total, s["id"], len(rows))
 
     import random
     random.seed(42)

@@ -438,15 +438,24 @@ async function generateGold() {
         btn.textContent = 'Gold 생성'; btn.disabled = false;
       } else {
         const elapsed = Math.floor((Date.now() - startTime) / 1000);
-        const min = Math.floor(elapsed / 60), sec = elapsed % 60;
         const elapsedTotal = Date.now() - startTime;
         if (elapsedTotal > 7200000) {
           clearInterval(poll);
           btn.textContent = 'Gold 생성'; btn.disabled = false;
           document.getElementById('gold-status').innerHTML = '<span style="color:var(--red);">타임아웃 (120분) — 서버 로그 확인</span>';
         } else {
+          const p = d.progress || {};
+          const done = p.done || 0, total = p.total || 0, gen = p.generated || 0;
+          const cur = p.current || '';
+          const pct = total > 0 ? Math.round(done / total * 100) : 0;
+          const bar = total > 0
+            ? `<div style="background:var(--border);border-radius:4px;height:6px;margin:6px 0;">
+                 <div style="background:var(--accent);height:6px;border-radius:4px;width:${pct}%;transition:width 0.5s;"></div>
+               </div>`
+            : '';
+          const min = Math.floor(elapsed / 60), sec = String(elapsed % 60).padStart(2,'0');
           document.getElementById('gold-status').innerHTML =
-            `<span style="color:var(--yellow);">LLM 호출 중... (${min}분 ${sec}초 경과)</span>`;
+            `<span style="color:var(--yellow);">${done}/${total} 시나리오 완료 — ${gen}건 생성 중${cur ? ` (${cur})` : ''} — ${min}:${sec} 경과</span>${bar}`;
         }
       }
     };

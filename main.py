@@ -33,7 +33,8 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 _bg_tasks: set[asyncio.Task] = set()
 _drain_call_count = 0
-_gold_status: dict = {"running": False, "error": None, "count": 0}
+_gold_status: dict = {"running": False, "error": None, "count": 0,
+                      "done": 0, "total": 0, "current": ""}
 
 
 async def _save_drain_state() -> None:
@@ -396,14 +397,20 @@ async def generate_gold(per_scenario: int = 30):
     """합성 골드 데이터 생성 — hard/medium 시나리오 LLM paraphrase."""
     from pipeline.synth_gold import generate as _gen_gold
 
-    _gold_status["running"] = True
-    _gold_status["error"] = None
-    _gold_status["count"] = 0
+    _gold_status.update({"running": True, "error": None, "count": 0,
+                          "done": 0, "total": 0, "current": ""})
+
+    def _progress(done, total, current, generated):
+        _gold_status["done"] = done
+        _gold_status["total"] = total
+        _gold_status["current"] = current
+        _gold_status["count"] = generated
 
     async def _run():
         try:
-            rows = await _gen_gold(n_per=per_scenario)
+            rows = await _gen_gold(n_per=per_scenario, on_progress=_progress)
             _gold_status["count"] = len(rows)
+            _gold_status["done"] = _gold_status["total"]
             logger.info("Gold 데이터 생성 완료: %d건", len(rows))
         except Exception as e:
             _gold_status["error"] = str(e)
@@ -436,6 +443,12 @@ async def gold_status(db: AsyncSession = Depends(get_db)):
         "db_count": int(db_count),
         "running": _gold_status["running"],
         "error": _gold_status["error"],
+        "progress": {
+            "done": _gold_status["done"],
+            "total": _gold_status["total"],
+            "current": _gold_status["current"],
+            "generated": _gold_status["count"],
+        },
     }
 
 
