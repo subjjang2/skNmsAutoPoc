@@ -390,6 +390,36 @@ async def stats(db: AsyncSession = Depends(get_db)):
 
 # ── Eval ─────────────────────────────────────────────────────────────
 
+@app.post("/api/gold/generate", status_code=202)
+async def generate_gold(per_scenario: int = 30):
+    """합성 골드 데이터 생성 — hard/medium 시나리오 LLM paraphrase."""
+    from pipeline.synth_gold import generate as _gen_gold
+
+    async def _run():
+        try:
+            rows = await _gen_gold(n_per=per_scenario)
+            logger.info("Gold 데이터 생성 완료: %d건", len(rows))
+        except Exception as e:
+            logger.error("Gold 생성 실패: %s", e, exc_info=True)
+
+    task = asyncio.create_task(_run())
+    _bg_tasks.add(task)
+    task.add_done_callback(_bg_tasks.discard)
+    return {"status": "started", "per_scenario": per_scenario,
+            "message": f"백그라운드 생성 중 — 완료 후 gold_pool.json 저장"}
+
+
+@app.get("/api/gold/status")
+async def gold_status():
+    import pathlib
+    p = pathlib.Path("data/openstack/gold_pool.json")
+    if not p.exists():
+        return {"exists": False, "count": 0}
+    import json as _json
+    data = _json.loads(p.read_text(encoding="utf-8"))
+    return {"exists": True, "count": len(data)}
+
+
 @app.post("/api/eval/run", status_code=202)
 async def start_eval(req: EvalRunRequest):
     from evaluation.experiment import run_experiment

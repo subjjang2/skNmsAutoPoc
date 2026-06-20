@@ -90,13 +90,18 @@ async def run_experiment(
             "python -m pipeline.build_dataset 먼저 실행하세요."
         )
 
-    # gold pool: 최대 학습 인덱스 이후 행 (학습 데이터와 겹침 방지)
-    # 데이터 부족 시 전체 train_pool 뒤쪽 사용
-    _max_train = max((tc for tc, _ in steps), default=800)
-    gold_pool = train_pool[_max_train:]
-    gold_pool = gold_pool[:600]
-    if not gold_pool:
-        logger.warning("gold_pool 비어있음 — gold step 자동 스킵")
+    # gold pool: synth_gold.json 우선, 없으면 train_pool 뒤쪽 슬라이스
+    gold_pool_json = _load_json(DATA_DIR / "gold_pool.json")
+    if gold_pool_json:
+        gold_pool = gold_pool_json[:600]
+        logger.info("gold_pool.json 사용: %d건", len(gold_pool))
+    else:
+        _max_train = max((tc for tc, _ in steps), default=800)
+        gold_pool = train_pool[_max_train:][:600]
+        if gold_pool:
+            logger.info("train_pool 뒤쪽 gold_pool 사용: %d건", len(gold_pool))
+        else:
+            logger.warning("gold_pool 비어있음 — gold step 자동 스킵")
 
     logger.info("Experiment %s: %d steps, train_pool=%d, test_set=%d, gold_pool=%d",
                 run_id, len(steps), len(train_pool), len(test_set), len(gold_pool))
