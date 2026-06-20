@@ -35,7 +35,7 @@ async def evaluate(db: AsyncSession, test_set: list[dict]) -> dict:
             pred_action, _, _, _ = await recommend(db, raw_log, drain_template, similar)
         except Exception as e:
             logger.warning("Eval item %s failed: %s", item.get("id"), e)
-            pred_action = "OPS_WATCH"  # safe default
+            pred_action = "OPS_WATCH"  # safe default (exception path only)
 
         if pred_action == gold_action:
             correct += 1

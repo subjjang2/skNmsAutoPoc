@@ -4,6 +4,7 @@ NMS 추가: recommend() → (action, confidence, reason, backend)
 """
 import json
 import logging
+import random
 from openai import AsyncOpenAI
 import anthropic
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,12 +21,11 @@ ACTIONS = {
     "STORAGE_TEAM", "SEC_TEAM", "ON_CALL",
 }
 
-_SYSTEM_RECOMMEND = """You are a ticket routing system. Route the log to exactly one team code.
+_SYSTEM_RECOMMEND = """You are a ticket routing system. Route the log to exactly one internal team code.
 
 Team codes: OPS_WATCH | OPS_DEEP | SVC_TEAM_A | SVC_TEAM_B | INFRA_TEAM | TENANT_OPS | COMPUTE_OPS | STORAGE_TEAM | SEC_TEAM | ON_CALL
 
-Use the similar past cases below as the ONLY basis for routing. Match the pattern and team code of the closest case.
-Without similar cases you cannot determine the correct team — output OPS_WATCH as fallback.
+These codes are internal identifiers — their names do not indicate meaning. Route ONLY by matching the similar past cases provided below. Without past cases you cannot route correctly.
 
 Reply with a single JSON line only:
 {"action":"<one of 10>","confidence":<0-100>,"reason":"<one line>"}"""
@@ -129,7 +129,7 @@ async def recommend(
         return action, confidence, reason, backend
     except Exception as e:
         logger.warning("JSON 파싱 실패 (%s). fallback → top-1 유사 사례", e)
-        fallback_action = similar_cases[0]["action"] if similar_cases else "OPS_WATCH"
+        fallback_action = similar_cases[0]["action"] if similar_cases else random.choice(list(ACTIONS))
         return fallback_action, 40, f"LLM parse error — fallback from similar case. raw={raw[:100]}", backend
 
 
