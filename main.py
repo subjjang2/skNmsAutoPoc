@@ -410,14 +410,17 @@ async def generate_gold(per_scenario: int = 30):
 
 
 @app.get("/api/gold/status")
-async def gold_status():
-    import pathlib
+async def gold_status(db: AsyncSession = Depends(get_db)):
+    import pathlib, json as _json
     p = pathlib.Path("data/openstack/gold_pool.json")
-    if not p.exists():
-        return {"exists": False, "count": 0}
-    import json as _json
-    data = _json.loads(p.read_text(encoding="utf-8"))
-    return {"exists": True, "count": len(data)}
+    file_count = len(_json.loads(p.read_text(encoding="utf-8"))) if p.exists() else 0
+
+    db_count = (await db.execute(
+        text("SELECT COUNT(*) FROM scenarios WHERE source = 'synth_gold'")
+    )).scalar() or 0
+
+    total = file_count or db_count
+    return {"exists": total > 0, "count": total, "file_count": file_count, "db_count": db_count}
 
 
 @app.post("/api/eval/run", status_code=202)

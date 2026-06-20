@@ -90,12 +90,17 @@ async def run_experiment(
             "python -m pipeline.build_dataset 먼저 실행하세요."
         )
 
-    # gold pool: gold_pool.json 전용. 없으면 gold step 전부 스킵.
+    # gold pool: 파일 우선, 없으면 DB에서 로드 (Railway 재시작 대비)
     gold_pool = _load_json(DATA_DIR / "gold_pool.json")[:600]
     if gold_pool:
         logger.info("gold_pool.json 사용: %d건", len(gold_pool))
     else:
-        logger.warning("gold_pool.json 없음 — gold step 스킵 (관리자 페이지에서 Gold 생성 필요)")
+        from pipeline.synth_gold import load_from_db as _load_gold_db
+        gold_pool = (await _load_gold_db())[:600]
+        if gold_pool:
+            logger.info("DB synth_gold 사용: %d건", len(gold_pool))
+        else:
+            logger.warning("gold_pool 없음 — gold step 스킵 (관리자 페이지에서 Gold 생성 필요)")
 
     logger.info("Experiment %s: %d steps, train_pool=%d, test_set=%d, gold_pool=%d",
                 run_id, len(steps), len(train_pool), len(test_set), len(gold_pool))

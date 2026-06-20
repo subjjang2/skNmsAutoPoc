@@ -82,8 +82,65 @@ async def generate(n_per: int = 30) -> list[dict]:
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     GOLD_POOL_JSON.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
-    logger.info("gold_pool.json 저장: %d건 총계 (셔플 완료)", len(rows))
+    logger.info("gold_pool.json 저장: %d건 (셔플 완료)", len(rows))
+
+    # DB에도 저장 (Railway 재시작 대비)
+    await _save_to_db(rows)
+    logger.info("DB 저장 완료: %d건", len(rows))
     return rows
+
+
+async def _save_to_db(rows: list[dict]) -> None:
+    """gold 데이터를 scenarios 테이블에 저장 (embedding 없이 텍스트만)."""
+    from db.database import AsyncSessionLocal
+    from db.models import Scenario
+    from sqlalchemy import select
+
+    async with AsyncSessionLocal() as db:
+        # 기존 synth_gold 행 삭제 후 재삽입
+        from sqlalchemy import text as sa_text
+        await db.execute(sa_text(
+            "DELETE FROM scenarios WHERE source = 'synth_gold'"
+        ))
+        await db.commit()
+
+        for r in rows:
+            db.add(Scenario(
+                scenario_id=r["id"],
+                action=r["action"],
+                log_text=r["raw_log"],
+                difficulty=r["difficulty"],
+                is_gold=True,
+                is_test=False,
+                source="synth_gold",
+            ))
+        await db.commit()
+
+
+async def load_from_db() -> list[dict]:
+    """DB에서 synth_gold 행 로드 → experiment용 dict 리스트."""
+    from db.database import AsyncSessionLocal
+    from db.models import Scenario
+    from sqlalchemy import select
+
+    async with AsyncSessionLocal() as db:
+        rows = (await db.execute(
+            select(Scenario)
+            .where(Scenario.source == "synth_gold")
+            .order_by(Scenario.scenario_id)
+        )).scalars().all()
+
+    return [
+        {
+            "id": r.scenario_id,
+            "raw_log": r.log_text,
+            "action": r.action,
+            "difficulty": r.difficulty or "medium",
+            "scenario_id": r.scenario_id,
+            "source": "synth_gold",
+        }
+        for r in rows
+    ]
 
 
 if __name__ == "__main__":
