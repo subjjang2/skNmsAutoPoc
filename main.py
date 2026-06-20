@@ -400,11 +400,13 @@ async def generate_gold(per_scenario: int = 30):
     _gold_status.update({"running": True, "error": None, "count": 0,
                           "done": 0, "total": 0, "current": ""})
 
-    def _progress(done, total, current, generated):
+    def _progress(done, total, current, generated, first_err):
         _gold_status["done"] = done
         _gold_status["total"] = total
         _gold_status["current"] = current
         _gold_status["count"] = generated
+        if first_err:
+            _gold_status["error"] = first_err
 
     async def _run():
         try:

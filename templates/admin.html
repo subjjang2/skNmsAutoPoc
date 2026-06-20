@@ -424,7 +424,7 @@ async function generateGold() {
     let poll;
     const checkStatus = async () => {
       const d = await fetch('/api/gold/status').then(r => r.json());
-      if (d.error) {
+      if (d.error && !d.running) {
         clearInterval(poll);
         btn.textContent = 'Gold 생성'; btn.disabled = false;
         document.getElementById('gold-status').innerHTML =

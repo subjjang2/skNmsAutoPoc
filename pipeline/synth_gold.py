@@ -26,7 +26,7 @@ def _load_scenarios(difficulties=("hard", "medium")) -> list[dict]:
     return [s for s in data.get("scenarios", []) if s.get("difficulty") in difficulties]
 
 
-async def _generate_variants(db, scenario: dict, n: int) -> list[str]:
+async def _generate_variants(db, scenario: dict, n: int) -> tuple[list[str], str | None]:
     from analyzer.llm_client import analyze
     system = "You are an OpenStack log generator. Output JSON array only, no explanation."
     prompt = (
@@ -45,12 +45,12 @@ async def _generate_variants(db, scenario: dict, n: int) -> list[str]:
         raw, _ = await analyze(db, system, prompt)
         m = re.search(r'\[.*\]', raw, re.DOTALL)
         if not m:
-            return []
+            return [], f"JSON 파싱 실패: {raw[:120]}"
         items = json.loads(m.group())
-        return [str(x).strip() for x in items if str(x).strip()][:n]
+        results = [str(x).strip() for x in items if str(x).strip()][:n]
+        return results, None
     except Exception as e:
-        logger.warning("LLM 생성 실패 (%s): %s", scenario["id"], e)
-        return []
+        return [], str(e)
 
 
 async def generate(n_per: int = 30, on_progress=None) -> list[dict]:
@@ -62,14 +62,18 @@ async def generate(n_per: int = 30, on_progress=None) -> list[dict]:
     total = len(scenarios)
     logger.info("대상 시나리오: %d개 (hard/medium), 시나리오당 %d건", total, n_per)
     if on_progress:
-        on_progress(0, total, "", 0)
+        on_progress(0, total, "", 0, None)
 
     rows: list[dict] = []
+    errors: list[str] = []
     async with AsyncSessionLocal() as db:
         for i, s in enumerate(scenarios, 1):
             if on_progress:
-                on_progress(i - 1, total, s["id"], len(rows))
-            variants = await _generate_variants(db, s, n_per)
+                on_progress(i - 1, total, s["id"], len(rows), None)
+            variants, err = await _generate_variants(db, s, n_per)
+            if err:
+                errors.append(f"{s['id']}: {err}")
+                logger.warning("[%d/%d] %s LLM 실패: %s", i, total, s["id"], err)
             for j, log in enumerate(variants):
                 rows.append({
                     "id": f"GLD-{s['id']}-{j+1:03d}",
@@ -80,8 +84,12 @@ async def generate(n_per: int = 30, on_progress=None) -> list[dict]:
                     "source": "gold",
                 })
             logger.info("[%d/%d] %s → %d건 생성", i, total, s["id"], len(variants))
+            first_err = errors[0] if errors else None
             if on_progress:
-                on_progress(i, total, s["id"], len(rows))
+                on_progress(i, total, s["id"], len(rows), first_err)
+
+    if not rows:
+        raise RuntimeError(f"모든 시나리오 LLM 실패 ({len(errors)}개). 첫 에러: {errors[0] if errors else '알 수 없음'}")
 
     import random
     random.seed(42)
