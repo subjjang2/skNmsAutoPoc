@@ -23,7 +23,8 @@ logging.basicConfig(level=logging.INFO)
 
 def _load_scenarios(difficulties=("hard", "medium")) -> list[dict]:
     data = yaml.safe_load(SCENARIOS_YAML.read_text(encoding="utf-8"))
-    return [s for s in data.get("scenarios", []) if s.get("difficulty") in difficulties]
+    return [s for s in data.get("scenarios", [])
+            if s.get("difficulty") in difficulties and not s.get("hold_out", False)]
 
 
 def _extract_json_array(raw: str) -> list:
