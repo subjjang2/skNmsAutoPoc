@@ -31,11 +31,12 @@ async def _get_settings(db: AsyncSession) -> LLMSettings:
     return s
 
 
-async def _call_dgx(s: LLMSettings, system_prompt: str, user_prompt: str) -> str:
+async def _call_dgx(s: LLMSettings, system_prompt: str, user_prompt: str,
+                    max_tokens: int = 512) -> str:
     client = AsyncOpenAI(
         base_url=f"{s.dgx_url.rstrip('/')}/v1",
         api_key=s.dgx_api_key or "dummy",
-        timeout=20.0,
+        timeout=60.0,
     )
     resp = await client.chat.completions.create(
         model=s.dgx_model or "Qwen2.5-14B",
@@ -43,7 +44,7 @@ async def _call_dgx(s: LLMSettings, system_prompt: str, user_prompt: str) -> str
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        max_tokens=512,
+        max_tokens=max_tokens,
         temperature=0,
         extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     )
@@ -53,33 +54,35 @@ async def _call_dgx(s: LLMSettings, system_prompt: str, user_prompt: str) -> str
     return content.strip()
 
 
-async def _call_claude(s: LLMSettings, system_prompt: str, user_prompt: str) -> str:
+async def _call_claude(s: LLMSettings, system_prompt: str, user_prompt: str,
+                       max_tokens: int = 512) -> str:
     client = anthropic.AsyncAnthropic(api_key=s.claude_api_key)
     resp = await client.messages.create(
         model=s.claude_model or "claude-sonnet-4-6",
-        max_tokens=512,
+        max_tokens=max_tokens,
         system=system_prompt,
         messages=[{"role": "user", "content": user_prompt}],
     )
     return resp.content[0].text.strip()
 
 
-async def analyze(db: AsyncSession, system_prompt: str, user_prompt: str) -> tuple[str, str]:
+async def analyze(db: AsyncSession, system_prompt: str, user_prompt: str,
+                  max_tokens: int = 512) -> tuple[str, str]:
     """범용 LLM 호출. (result_text, used_backend) 반환."""
     s = await _get_settings(db)
     if s.active_backend == "claude":
-        result = await _call_claude(s, system_prompt, user_prompt)
+        result = await _call_claude(s, system_prompt, user_prompt, max_tokens=max_tokens)
         return result, "claude"
 
     logger.info("DGX 호출 (url=%s model=%s)", s.dgx_url, s.dgx_model)
     try:
-        result = await _call_dgx(s, system_prompt, user_prompt)
+        result = await _call_dgx(s, system_prompt, user_prompt, max_tokens=max_tokens)
         return result, "dgx"
     except Exception as dgx_err:
         logger.error("DGX 오류: %s", dgx_err, exc_info=True)
         if s.claude_api_key:
             logger.info("Claude API로 자동 폴백")
-            result = await _call_claude(s, system_prompt, user_prompt)
+            result = await _call_claude(s, system_prompt, user_prompt, max_tokens=max_tokens)
             return result, "claude(fallback)"
         raise RuntimeError(f"DGX 오류 + Claude 키 미설정: {dgx_err}") from dgx_err
 

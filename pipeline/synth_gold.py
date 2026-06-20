@@ -42,7 +42,7 @@ async def _generate_variants(db, scenario: dict, n: int) -> tuple[list[str], str
         f'Output JSON array only: ["log1", "log2", ...]'
     )
     try:
-        raw, _ = await analyze(db, system, prompt)
+        raw, _ = await analyze(db, system, prompt, max_tokens=4096)
         m = re.search(r'\[.*\]', raw, re.DOTALL)
         if not m:
             return [], f"JSON 파싱 실패: {raw[:120]}"
