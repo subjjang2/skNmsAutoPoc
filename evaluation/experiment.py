@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 DATA_DIR = pathlib.Path(__file__).parent.parent / "data" / "openstack"
 
 DEFAULT_STEPS = [
+    (0, 0),      # 베이스라인: 비교 사례 없음, LLM 단독 추측 → ~20-35%
     (200, 0),
-    (400, 0),
     (800, 0),
     (800, 100),
     (800, 300),
