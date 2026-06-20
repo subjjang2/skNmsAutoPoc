@@ -103,12 +103,15 @@ async def upsert_scenario_batch(
 
 
 async def reset_training_embeddings(db: AsyncSession) -> None:
-    """학습 데이터 임베딩 초기화 (is_test=false 행만). 실험 step 리셋용."""
+    """실험용 임베딩 초기화. 시드 시나리오(SCN-*)는 보존."""
     await db.execute(
-        text("UPDATE scenarios SET embedding = NULL WHERE is_test = false")
+        text(
+            "UPDATE scenarios SET embedding = NULL "
+            "WHERE is_test = false AND scenario_id NOT LIKE 'SCN-%'"
+        )
     )
     await db.commit()
-    logger.info("Training embeddings reset (is_test=false rows)")
+    logger.info("Training embeddings reset (experiment rows only, SCN-* preserved)")
 
 
 async def create_ivfflat_index(db: AsyncSession) -> None:

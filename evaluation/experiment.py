@@ -94,15 +94,18 @@ async def run_experiment(
     # 데이터 부족 시 전체 train_pool 뒤쪽 사용
     _max_train = max((tc for tc, _ in steps), default=800)
     gold_pool = train_pool[_max_train:]
-    if not gold_pool:
-        gold_pool = train_pool  # 소규모 데이터 fallback (메커니즘 데모용)
     gold_pool = gold_pool[:600]
+    if not gold_pool:
+        logger.warning("gold_pool 비어있음 — gold step 자동 스킵")
 
     logger.info("Experiment %s: %d steps, train_pool=%d, test_set=%d, gold_pool=%d",
                 run_id, len(steps), len(train_pool), len(test_set), len(gold_pool))
 
     async with AsyncSessionLocal() as db:
         for step_idx, (train_count, gold_count) in enumerate(steps):
+            if gold_count > 0 and not gold_pool:
+                logger.warning("Step %d: gold_count=%d 요청이나 gold_pool 없음 — 스킵", step_idx, gold_count)
+                continue
             logger.info("Step %d: train=%d gold=%d", step_idx, train_count, gold_count)
 
             # 1) 학습 임베딩 초기화

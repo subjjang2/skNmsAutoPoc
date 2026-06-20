@@ -615,9 +615,13 @@ async def update_settings(req: AdminSettingsRequest, db: AsyncSession = Depends(
     s = (await db.execute(select(LLMSettings).limit(1))).scalar_one_or_none()
     if not s:
         raise HTTPException(404, "설정 없음")
+    key_fields = {"dgx_api_key", "claude_api_key"}
     for field, val in req.model_dump().items():
-        if hasattr(s, field):
-            setattr(s, field, val)
+        if not hasattr(s, field):
+            continue
+        if field in key_fields and not val:
+            continue  # 빈 문자열로 기존 키 덮어쓰기 방지
+        setattr(s, field, val)
     await db.commit()
     return {"status": "ok"}
 
