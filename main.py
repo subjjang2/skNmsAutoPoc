@@ -565,9 +565,14 @@ async def generate_alt_logs(scenario_id: str, db: AsyncSession = Depends(get_db)
     system = "You are an OpenStack log generator. Output JSON array only, no explanation."
     prompt = (
         f"OpenStack NMS log scenario: {row.description}\n"
-        f"Action: {row.action}\n"
-        f"Example log: {row.log_text}\n\n"
-        f"Generate 4 English log messages with the same meaning but different wording.\n"
+        f"Action required: {row.action}\n"
+        f"Reference log (DO NOT reuse any words from this): {row.log_text}\n\n"
+        f"Generate 4 English OpenStack log messages for the same failure scenario.\n"
+        f"STRICT RULES:\n"
+        f"- Use completely different vocabulary from the reference log\n"
+        f"- Use different log format (syslog, journald, python logging, etc.)\n"
+        f"- Include realistic details: timestamps, UUIDs, IP addresses, port numbers\n"
+        f"- Each message must look like it came from a different OpenStack component or node\n"
         f"Output JSON array only. Example: [\"log1\", \"log2\", \"log3\", \"log4\"]"
     )
     raw, _ = await analyze(db, system, prompt)
