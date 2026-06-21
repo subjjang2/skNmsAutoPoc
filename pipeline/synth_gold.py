@@ -118,13 +118,24 @@ async def generate(n_per: int = 30, on_progress=None) -> list[dict]:
     if not rows:
         raise RuntimeError(f"모든 시나리오 LLM 실패 ({len(errors)}개). 첫 에러: {errors[0] if errors else '알 수 없음'}")
 
-    import random
-    random.seed(42)
-    random.shuffle(rows)
+    # 층화 라운드로빈: gold_pool[:N] 어떤 prefix든 8종이 균등 배분되도록 인터리브.
+    # 단순 셔플은 prefix 분포가 불균등 → 실험 곡선이 계단식이 됨.
+    from collections import defaultdict
+    by_scn: dict[str, list[dict]] = defaultdict(list)
+    for r in rows:
+        by_scn[r["scenario_id"]].append(r)
+    interleaved: list[dict] = []
+    idx = 0
+    while len(interleaved) < len(rows):
+        for sid in sorted(by_scn.keys()):
+            if idx < len(by_scn[sid]):
+                interleaved.append(by_scn[sid][idx])
+        idx += 1
+    rows = interleaved
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     GOLD_POOL_JSON.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
-    logger.info("gold_pool.json 저장: %d건 (셔플 완료)", len(rows))
+    logger.info("gold_pool.json 저장: %d건 (시나리오별 층화 인터리브)", len(rows))
 
     # DB에도 저장 (Railway 재시작 대비)
     await _save_to_db(rows)

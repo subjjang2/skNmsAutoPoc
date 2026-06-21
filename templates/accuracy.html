@@ -101,12 +101,12 @@
 
     <strong style="color:var(--accent);">6단계 실험 순서</strong><br>
     <div style="margin:8px 0 0 8px; display:grid; gap:4px;">
-      <div>① 일반 사례 <strong>200개</strong> → 희귀 장애 시험 채점 <span style="color:var(--muted);">(못 맞힘)</span></div>
-      <div>② 일반 사례 <strong>400개</strong> → 채점 <span style="color:var(--muted);">(양 늘려도 그대로/하락)</span></div>
-      <div>③ 일반 사례 <strong>800개</strong> → 채점 <span style="color:var(--muted);">(양만으론 한계)</span></div>
-      <div>④ 800개 + <span style="color:var(--green);">골드 100개</span> → 채점 <span style="color:var(--green);">(상승 시작)</span></div>
-      <div>⑤ 800개 + <span style="color:var(--green);">골드 300개</span> → 채점 <span style="color:var(--green);">(더 상승)</span></div>
-      <div>⑥ 800개 + <span style="color:var(--green);">골드 600개</span> → 채점 <span style="color:var(--green);">(급상승)</span></div>
+      <div>① 사례 <strong>0개</strong> → 희귀 장애 시험 채점 <span style="color:var(--muted);">(찍기 수준)</span></div>
+      <div>② 일반 사례 <strong>800개</strong> → 채점 <span style="color:var(--muted);">(양만으론 한계)</span></div>
+      <div>③ 800개 + <span style="color:var(--green);">골드 50개</span> → 채점 <span style="color:var(--green);">(상승 시작)</span></div>
+      <div>④ 800개 + <span style="color:var(--green);">골드 100개</span> → 채점 <span style="color:var(--green);">(상승)</span></div>
+      <div>⑤ 800개 + <span style="color:var(--green);">골드 200개</span> → 채점 <span style="color:var(--green);">(더 상승)</span></div>
+      <div>⑥ 800개 + <span style="color:var(--green);">골드 400개</span> → 채점 <span style="color:var(--green);">(포화)</span></div>
     </div><br>
 
     <span style="color:var(--green);">골드 데이터</span>란? 운영자가 대시보드에서 직접 "이 판단이 틀렸다, 정답은 이거다" 검수·교정한 고품질 사례.<br>
@@ -124,7 +124,7 @@
     <span style="font-size:12px; color:var(--muted);" id="run-id-label"></span>
   </div>
   <div style="font-size:12px; color:var(--muted);">
-    일반 학습 step: 200 → 400 → 800 &nbsp;|&nbsp; 골드 step: 100 → 300 → 600<br>
+    일반 학습 step: 0 → 800 &nbsp;|&nbsp; 골드 step: 50 → 100 → 200 → 400<br>
     시험: 희귀 장애 8종(hold_out) — 일반 학습엔 없고 골드에만 정답 있음<br>
     <span style="color:var(--yellow);">주의: build_dataset.py 실행 + 골드 생성 후 사용하세요</span>
   </div>

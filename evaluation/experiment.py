@@ -25,12 +25,12 @@ logger = logging.getLogger(__name__)
 DATA_DIR = pathlib.Path(__file__).parent.parent / "data" / "openstack"
 
 DEFAULT_STEPS = [
-    (0, 0),      # 베이스라인: 비교 사례 없음 → OPS_WATCH 강제 반환 → ~0-10%
-    (200, 0),
-    (800, 0),
+    (0, 0),      # 순수 baseline: 사례 0 → 랜덤 ~10%
+    (800, 0),    # train 한계: 흔한 장애 800개로도 희귀 장애 못 잡음
+    (800, 50),   # gold 소량 → 상승 시작
     (800, 100),
-    (800, 300),
-    (800, 600),
+    (800, 200),
+    (800, 400),  # gold 충분 → 포화
 ]
 
 
