@@ -178,8 +178,8 @@ class AdminSettingsRequest(BaseModel):
 
 
 class EvalRunRequest(BaseModel):
-    train_steps: list[int] = [200, 400, 800]
-    gold_steps: list[int] = [0, 100, 300, 600]
+    train_steps: list[int] = [0, 800]
+    gold_steps: list[int] = [50, 100, 200, 400]
 
 
 class AutoDemoRequest(BaseModel):

@@ -40,29 +40,6 @@ def _load_json(path: pathlib.Path) -> list[dict]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-async def _build_alt_test_set() -> list[dict]:
-    """DB에서 alt_logs 있는 시나리오 → test set 구성."""
-    from sqlalchemy import text as sa_text
-    async with AsyncSessionLocal() as db:
-        rows = (await db.execute(sa_text(
-            "SELECT scenario_id, action, difficulty, alt_logs "
-            "FROM scenarios WHERE scenario_id LIKE 'SCN-%' AND alt_logs IS NOT NULL"
-        ))).fetchall()
-    result = []
-    for r in rows:
-        alt = r.alt_logs if isinstance(r.alt_logs, list) else json.loads(r.alt_logs or "[]")
-        for log in alt:
-            if log and log.strip():
-                result.append({
-                    "id": f"ALT-{r.scenario_id}-{len(result):03d}",
-                    "raw_log": log.strip(),
-                    "action": r.action,
-                    "difficulty": r.difficulty or "medium",
-                    "scenario_id": r.scenario_id,
-                })
-    return result
-
-
 async def run_experiment(
     steps: list[tuple[int, int]] | None = None,
     run_id: str | None = None,
@@ -145,6 +122,12 @@ async def run_experiment(
                 logger.warning("Step %d: gold_count=%d 요청이나 gold_pool 없음 — 스킵", step_idx, gold_count)
                 continue
             logger.info("Step %d: train=%d gold=%d", step_idx, train_count, gold_count)
+            if train_count > len(train_pool):
+                logger.warning("Step %d: train_count=%d > train_pool=%d — 가용분만 적재",
+                               step_idx, train_count, len(train_pool))
+            if gold_count > len(gold_pool):
+                logger.warning("Step %d: gold_count=%d > gold_pool=%d — 가용분만 적재",
+                               step_idx, gold_count, len(gold_pool))
 
             # 1) 학습 임베딩 초기화
             await reset_training_embeddings(db)
