@@ -98,6 +98,23 @@ async def run_experiment(
         else:
             logger.warning("gold_pool 없음 — gold step 스킵 (관리자 페이지에서 Gold 생성 필요)")
 
+    # 층화 라운드로빈: gold_pool[:N] 어떤 prefix든 시나리오별 균등 배분.
+    # 저장 순서(셔플/생성순)와 무관하게 로드 시점에 재정렬 → 재생성 없이 점진 곡선.
+    if gold_pool:
+        from collections import defaultdict as _dd
+        _by = _dd(list)
+        for _r in gold_pool:
+            _by[_r.get("scenario_id", _r.get("id", ""))].append(_r)
+        _inter: list[dict] = []
+        _i = 0
+        while len(_inter) < len(gold_pool):
+            for _sid in sorted(_by.keys()):
+                if _i < len(_by[_sid]):
+                    _inter.append(_by[_sid][_i])
+            _i += 1
+        gold_pool = _inter
+        logger.info("gold_pool 층화 인터리브 적용: %d종 균등 배분", len(_by))
+
     logger.info("Experiment %s: %d steps, train_pool=%d, test_set=%d, gold_pool=%d",
                 run_id, len(steps), len(train_pool), len(test_set), len(gold_pool))
 
