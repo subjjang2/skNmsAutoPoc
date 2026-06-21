@@ -41,11 +41,14 @@
   .section-label { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 12px; }
   .cm-wrap { overflow-x: auto; margin-top: 8px; }
   .cm-table { border-collapse: collapse; font-size: 12px; }
-  .cm-table th { color: var(--muted); padding: 6px 10px; text-align: center; font-weight: 600; white-space: nowrap; }
+  .cm-table th { color: var(--muted); padding: 6px 10px; text-align: center; font-weight: 600; white-space: nowrap; font-size: 13px; }
   .cm-table th.row-label { text-align: right; padding-right: 14px; }
-  .cm-table td { width: 64px; height: 40px; text-align: center; font-family: monospace; font-weight: 700; border: 1px solid var(--border); }
+  .cm-table td { width: 64px; height: 40px; text-align: center; font-family: monospace; font-weight: 700; border: 1px solid var(--border); font-size: 15px; }
   .cm-axis-label { font-size: 11px; color: var(--muted); text-align: center; margin-top: 4px; }
   #confusion-section { display: none; }
+  .guard-banner { display: none; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 10px;
+    background: rgba(210,153,34,.1); border: 1px solid var(--yellow); color: var(--yellow); font-size: 13px; }
+  .guard-banner button { background: var(--yellow); color: #0d1117; }
 </style>
 </head>
 <body>
@@ -57,6 +60,13 @@
 </header>
 
 <main>
+
+<!-- 골드 데이터 0 가드 배너 -->
+<div class="guard-banner" id="gold-guard">
+  <span style="font-size:16px;">⚠️</span>
+  <span id="gold-guard-msg" style="flex:1;">골드 데이터가 없습니다. 실험 곡선이 의미를 가지려면 먼저 골드를 생성하세요.</span>
+  <button id="gold-guard-btn" onclick="generateGold()">골드 생성 ▶</button>
+</div>
 
 <!-- 통계 카드 -->
 <div class="card">
@@ -79,16 +89,16 @@
       <div class="stat-label">골드 건수</div>
     </div>
     <div class="stat-card">
-      <div class="stat-value" id="stat-majority" style="color:var(--muted);">35%</div>
+      <div class="stat-value" id="stat-majority" style="color:var(--muted);">25%</div>
       <div class="stat-label">다수 클래스 기준선</div>
     </div>
   </div>
 </div>
 
 <!-- 페이지 설명 -->
-<div class="card" style="border-color: rgba(88,166,255,.3); background: rgba(88,166,255,.05);">
-  <div style="font-size:15px; font-weight:600; margin-bottom:12px;">이 페이지는 무엇인가요?</div>
-  <div style="font-size:13px; color:var(--text); line-height:1.8;">
+<details class="card" style="border-color: rgba(88,166,255,.3); background: rgba(88,166,255,.05);" open>
+  <summary style="cursor:pointer; font-size:15px; font-weight:600;">이 페이지는 무엇인가요? <span style="color:var(--muted); font-weight:400; font-size:12px;">(클릭해 접기/펼치기)</span></summary>
+  <div style="font-size:13px; color:var(--text); line-height:1.8; margin-top:12px;">
     <strong>일반 로그를 아무리 많이 모아도 "처음 보는 희귀 장애"는 못 맞히고, 운영자가 검수한 골드(Gold)를 넣어야 정확도가 오른다 — 이걸 증명하는 페이지입니다.</strong><br><br>
 
     <span style="color:var(--accent);">🚗 테슬라 자율주행 비유</span>: 테슬라는 일반 주행 영상을 수백만 시간 모으지만,
@@ -112,7 +122,7 @@
     <span style="color:var(--green);">골드 데이터</span>란? 운영자가 대시보드에서 직접 "이 판단이 틀렸다, 정답은 이거다" 검수·교정한 고품질 사례.<br>
     <strong>핵심 메시지: 정확도는 로그 "양"이 아니라, 빠진 장애의 정답(Gold)을 채우느냐가 결정한다.</strong>
   </div>
-</div>
+</details>
 
 <!-- 실험 실행 패널 -->
 <div class="card">
@@ -175,6 +185,7 @@
 let chart = null;
 let pollTimer = null;
 let currentRunId = null;
+let expectedSteps = 6;
 
 function buildChart(labels, trainRates, goldRates, baseline, majority) {
   const ctx = document.getElementById('curve-chart').getContext('2d');
@@ -194,7 +205,7 @@ function buildChart(labels, trainRates, goldRates, baseline, majority) {
           borderColor: '#58a6ff',
           backgroundColor: 'rgba(88,166,255,.15)',
           pointBackgroundColor: '#58a6ff',
-          tension: 0.3, fill: false, borderWidth: 2,
+          tension: 0.3, fill: false, borderWidth: 3, pointRadius: 4,
         },
         {
           label: 'Gold added',
@@ -202,7 +213,7 @@ function buildChart(labels, trainRates, goldRates, baseline, majority) {
           borderColor: '#3fb950',
           backgroundColor: 'rgba(63,185,80,.15)',
           pointBackgroundColor: '#3fb950',
-          tension: 0.3, fill: false, borderWidth: 2,
+          tension: 0.3, fill: false, borderWidth: 3, pointRadius: 4,
           borderDash: [],
         },
         {
@@ -217,8 +228,9 @@ function buildChart(labels, trainRates, goldRates, baseline, majority) {
     options: {
       responsive: true,
       plugins: {
-        legend: { labels: { color: '#c9d1d9' } },
+        legend: { labels: { color: '#c9d1d9', font: { size: 14 } } },
         tooltip: {
+          titleFont: { size: 14 }, bodyFont: { size: 14 },
           callbacks: {
             label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y}%`
           }
@@ -226,15 +238,15 @@ function buildChart(labels, trainRates, goldRates, baseline, majority) {
       },
       scales: {
         x: {
-          ticks: { color: '#8b949e' },
+          ticks: { color: '#8b949e', font: { size: 14 } },
           grid: { color: '#30363d' },
-          title: { display: true, text: 'train/gold count', color: '#8b949e' }
+          title: { display: true, text: 'train/gold count', color: '#8b949e', font: { size: 14 } }
         },
         y: {
           min: 0, max: 100,
-          ticks: { color: '#8b949e', callback: v => v + '%' },
+          ticks: { color: '#8b949e', font: { size: 14 }, callback: v => v + '%' },
           grid: { color: '#30363d' },
-          title: { display: true, text: 'Match Rate (%)', color: '#8b949e' }
+          title: { display: true, text: 'Match Rate (%)', color: '#8b949e', font: { size: 14 } }
         }
       }
     }
@@ -256,7 +268,7 @@ async function loadCurve() {
     }
 
     const points = data.points;
-    const majority = data.majority_baseline || 35;
+    const majority = data.majority_baseline || 25;
     currentRunId = data.run_id;
     document.getElementById('run-id-label').textContent = `run: ${data.run_id}`;
     document.getElementById('table-run-label').textContent = `— 실험 ID: ${data.run_id}`;
@@ -330,11 +342,13 @@ async function startExperiment() {
     const res = await fetch('/api/eval/run', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({train_steps: [200, 400, 800], gold_steps: [0, 100, 300, 600]})
+      // 페이지 설명과 일치: 0→800 일반, 골드 50→100→200→400 (총 6 step)
+      body: JSON.stringify({train_steps: [0, 800], gold_steps: [50, 100, 200, 400]})
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || '오류');
     currentRunId = data.run_id;
+    expectedSteps = (data.steps && data.steps.length) || 6;
     document.getElementById('run-id-label').textContent = `run: ${data.run_id}`;
 
     // 5초마다 폴링
@@ -348,10 +362,10 @@ async function startExperiment() {
       } else {
         // 아직 결과 없음 — 진행 중 표시만 갱신
         document.getElementById('run-status').className = 'status-pill running';
-        document.getElementById('run-status').textContent = `실행 중... (${points.length}/6 step)`;
+        document.getElementById('run-status').textContent = `실행 중... (${points.length}/${expectedSteps} step)`;
         document.getElementById('run-id-label').textContent = `run: ${currentRunId} (결과 대기 중...)`;
       }
-      if (points.length >= 6 && resp.run_id === currentRunId) {
+      if (points.length >= expectedSteps && resp.run_id === currentRunId) {
         clearInterval(pollTimer);
         pollTimer = null;
       }
@@ -366,9 +380,12 @@ function buildConfusion(confusion, stepLabel) {
   const section = document.getElementById('confusion-section');
   if (!confusion || !Object.keys(confusion).length) { section.style.display = 'none'; return; }
 
-  const ACTIONS = ['AGENT_RESTART', 'ESCALATE', 'MONITOR', 'RESCHEDULE', 'RESOURCE_CHECK'];
-  const present = ACTIONS.filter(a => confusion[a] || ACTIONS.some(b => (confusion[b] || {})[a]));
-  const labels = present.length ? present : ACTIONS;
+  // 동적 라벨: 행 키 ∪ 모든 열 키 (액션 체계 변경 시 자동 대응)
+  const labelSet = new Set(Object.keys(confusion));
+  for (const row of Object.values(confusion)) {
+    for (const col of Object.keys(row || {})) labelSet.add(col);
+  }
+  const labels = [...labelSet].sort();
 
   // max value for color scaling
   let maxVal = 0;
@@ -377,15 +394,12 @@ function buildConfusion(confusion, stepLabel) {
     if (v > maxVal) maxVal = v;
   }
 
-  // short labels for display
-  const SHORT = { AGENT_RESTART:'AGENT_RST', ESCALATE:'ESCALATE', MONITOR:'MONITOR', RESCHEDULE:'RESCHED', RESOURCE_CHECK:'RES_CHK' };
-
   let html = '<thead><tr><th class="row-label">Gold \\ Pred</th>';
-  for (const col of labels) html += `<th>${SHORT[col] || col}</th>`;
+  for (const col of labels) html += `<th>${col}</th>`;
   html += '</tr></thead><tbody>';
 
   for (const row of labels) {
-    html += `<tr><th class="row-label">${SHORT[row] || row}</th>`;
+    html += `<tr><th class="row-label">${row}</th>`;
     for (const col of labels) {
       const v = (confusion[row] || {})[col] || 0;
       const isDiag = row === col;
@@ -410,6 +424,37 @@ function buildConfusion(confusion, stepLabel) {
   section.style.display = '';
 }
 
+// ── 골드 데이터 0 가드 ──────────────────────────────────────────
+let goldPollTimer = null;
+async function checkGold() {
+  try {
+    const s = await fetch('/api/gold/status').then(r => r.json());
+    const banner = document.getElementById('gold-guard');
+    const msg = document.getElementById('gold-guard-msg');
+    const btn = document.getElementById('gold-guard-btn');
+    if (s.running) {
+      banner.style.display = 'flex';
+      const p = s.progress || {};
+      msg.textContent = `골드 생성 중... (${p.done || 0}/${p.total || 0}) — 생성 ${p.generated || 0}건`;
+      btn.disabled = true; btn.style.opacity = .5;
+      if (!goldPollTimer) goldPollTimer = setInterval(checkGold, 3000);
+    } else if (!s.exists || s.count === 0) {
+      banner.style.display = 'flex';
+      msg.textContent = '골드 데이터가 없습니다. 실험 곡선이 의미를 가지려면 먼저 골드를 생성하세요.';
+      btn.disabled = false; btn.style.opacity = 1;
+      if (goldPollTimer) { clearInterval(goldPollTimer); goldPollTimer = null; }
+    } else {
+      banner.style.display = 'none';
+      if (goldPollTimer) { clearInterval(goldPollTimer); goldPollTimer = null; }
+    }
+  } catch(e) {}
+}
+async function generateGold() {
+  await fetch('/api/gold/generate', { method: 'POST' });
+  checkGold();
+}
+
+checkGold();
 loadCurve();
 </script>
 </body>

@@ -60,16 +60,23 @@ async def _load_drain_state() -> None:
 
 
 async def _auto_build_dataset():
-    """data 파일 없으면 자동 다운로드+빌드 (Railway 등 ephemeral FS 대응)."""
+    """data 파일 없으면 자동 다운로드+빌드 (Railway 등 ephemeral FS 대응).
+
+    외부 다운로드(GitHub raw CSV) 실패가 부팅을 죽이지 않도록 예외를 삼킨다.
+    실패 시 /api/eval/run은 안 되지만, /api/logs(추론)·UI는 정상 기동.
+    """
     import pathlib
     data_dir = pathlib.Path("data/openstack")
     if not (data_dir / "train_pool.json").exists():
         logger.info("train_pool.json 없음 — 자동 빌드 시작")
-        from pipeline.log_loader import load_raw_lines
-        from pipeline.build_dataset import build
-        load_raw_lines()
-        build(test_size=int(os.environ.get("TEST_SIZE", "200")))
-        logger.info("데이터셋 자동 빌드 완료")
+        try:
+            from pipeline.log_loader import load_raw_lines
+            from pipeline.build_dataset import build
+            load_raw_lines()
+            build(test_size=int(os.environ.get("TEST_SIZE", "200")))
+            logger.info("데이터셋 자동 빌드 완료")
+        except Exception as e:
+            logger.error("데이터셋 자동 빌드 실패 (부팅은 계속): %s", e, exc_info=True)
 
 
 async def _embed_seeded_scenarios():

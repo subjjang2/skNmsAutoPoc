@@ -38,8 +38,9 @@
   .badge-blue { background: rgba(88,166,255,.2); color: var(--accent); border: 1px solid var(--accent); }
   .badge-yellow { background: rgba(210,153,34,.2); color: var(--yellow); border: 1px solid var(--yellow); }
   .badge-purple { background: rgba(188,140,255,.2); color: var(--purple); border: 1px solid var(--purple); }
+  .badge-gray { background: rgba(139,148,158,.2); color: var(--muted); border: 1px solid var(--muted); }
   .conf-bar { height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; width: 160px; display: inline-block; vertical-align: middle; }
-  .conf-fill { height: 100%; background: var(--accent); }
+  .conf-fill { height: 100%; background: var(--accent); transition: width .4s ease; }
   .similar-item { font-size: 12px; color: var(--muted); padding: 4px 0; border-bottom: 1px solid var(--border); }
   .similar-item:last-child { border: none; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -54,21 +55,42 @@
   #result-area { min-height: 20px; }
   .hidden { display: none !important; }
   .loading { color: var(--muted); font-style: italic; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite;
+    vertical-align: middle; margin-right: 7px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
   .error-msg { color: var(--red); font-size: 12px; }
   #auto-result { font-size: 13px; color: var(--green); margin-top: 8px; }
+  .guard-banner { display: none; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 10px;
+    background: rgba(210,153,34,.1); border: 1px solid var(--yellow); color: var(--yellow); font-size: 13px; }
+  .guard-banner button { background: var(--yellow); color: #0d1117; }
+  .llm-pill { font-size: 12px; padding: 3px 10px; border-radius: 12px; border: 1px solid var(--border); color: var(--muted); }
+  .llm-pill.ok { color: var(--green); border-color: var(--green); }
+  .llm-pill.bad { color: var(--red); border-color: var(--red); }
+  .llm-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); margin-right: 5px; vertical-align: middle; }
+  .llm-pill.ok .llm-dot { background: var(--green); }
+  .llm-pill.bad .llm-dot { background: var(--red); }
 </style>
 </head>
 <body>
 <header>
   <div class="live-dot"></div>
   <h1>AI NMS — Flywheel Demo</h1>
-  <nav style="margin-left:auto; display:flex; gap:8px;">
+  <span class="llm-pill" id="llm-status" style="margin-left:auto;" title="LLM 백엔드 연결 상태"><span class="llm-dot"></span>LLM 확인 중…</span>
+  <nav style="display:flex; gap:8px;">
     <a href="/accuracy">Accuracy →</a>
     <a href="/admin">Admin</a>
   </nav>
 </header>
 
 <main>
+
+<!-- 골드 데이터 0 가드 배너 -->
+<div class="guard-banner" id="gold-guard">
+  <span style="font-size:16px;">⚠️</span>
+  <span id="gold-guard-msg" style="flex:1;">골드 데이터가 없습니다. 플라이휠 효과 시연 전에 골드를 생성하세요.</span>
+  <button id="gold-guard-btn" onclick="generateGold()">골드 생성 ▶</button>
+</div>
 
 <!-- STEP 1 -->
 <div class="card">
@@ -94,6 +116,12 @@
   </div>
 </div>
 
+<!-- 팀코드 범례 -->
+<details class="card" style="padding:14px 20px;">
+  <summary style="cursor:pointer; font-size:13px; color:var(--muted);">라우팅 대상 10개 팀코드 설명 ▾</summary>
+  <div id="legend-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:8px; margin-top:12px;"></div>
+</details>
+
 <!-- STEP 2 -->
 <div class="card" id="result-area">
   <div class="step-label">Step 2 — AI Shadow 분석</div>
@@ -112,11 +140,16 @@
     <p style="font-size:13px; color:var(--muted); margin-bottom:10px;">AI 추천이 틀렸으면 올바른 액션을 선택 후 거절하세요. 골드 데이터로 저장됩니다.</p>
     <div class="row" style="margin-bottom:10px;">
       <select id="reject-action" style="flex:1;">
-        <option value="MONITOR">MONITOR — 모니터링 유지 (지켜보기)</option>
-        <option value="RESOURCE_CHECK">RESOURCE_CHECK — 자원 점검 (CPU/메모리/디스크)</option>
-        <option value="AGENT_RESTART">AGENT_RESTART — 에이전트 재시작</option>
-        <option value="RESCHEDULE">RESCHEDULE — 인스턴스 재스케줄</option>
-        <option value="ESCALATE">ESCALATE — 상위 에스컬레이션 (즉시 대응)</option>
+        <option value="OPS_WATCH">OPS_WATCH — 운영 모니터링</option>
+        <option value="OPS_DEEP">OPS_DEEP — 심층 조사</option>
+        <option value="SVC_TEAM_A">SVC_TEAM_A — 서비스팀 A</option>
+        <option value="SVC_TEAM_B">SVC_TEAM_B — 서비스팀 B</option>
+        <option value="INFRA_TEAM">INFRA_TEAM — 인프라팀</option>
+        <option value="TENANT_OPS">TENANT_OPS — 테넌트 운영</option>
+        <option value="COMPUTE_OPS">COMPUTE_OPS — 컴퓨트 운영</option>
+        <option value="STORAGE_TEAM">STORAGE_TEAM — 스토리지팀</option>
+        <option value="SEC_TEAM">SEC_TEAM — 보안팀</option>
+        <option value="ON_CALL">ON_CALL — 온콜 에스컬레이션</option>
       </select>
     </div>
     <input type="text" id="reject-note" placeholder="메모 (선택)" style="margin-bottom:10px;">
@@ -148,6 +181,13 @@
   <div id="auto-result"></div>
 </div>
 
+<!-- 지능형 라우팅 현황 -->
+<div class="card">
+  <div class="step-label">지능형 라우팅 현황 — 팀별 배정 건수</div>
+  <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">AI가 로그를 분석해 10개 내부 팀으로 자동 라우팅한 누적 결과입니다.</p>
+  <div id="routing-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px;"></div>
+</div>
+
 <!-- Recent incidents table -->
 <div class="card">
   <div class="step-label">최근 인시던트</div>
@@ -160,11 +200,23 @@
 </main>
 
 <script>
-const ACTIONS = ['MONITOR','RESOURCE_CHECK','AGENT_RESTART','RESCHEDULE','ESCALATE'];
-const ACTION_COLORS = {
-  MONITOR:'badge-blue', RESOURCE_CHECK:'badge-yellow',
-  AGENT_RESTART:'badge-green', RESCHEDULE:'badge-purple', ESCALATE:'badge-red'
+// 10종 내부 팀코드: 색 + 한글 라벨 단일 출처
+const ACTION_META = {
+  OPS_WATCH:    { label:'운영 모니터링',     color:'badge-gray' },
+  OPS_DEEP:     { label:'심층 조사',         color:'badge-gray' },
+  SVC_TEAM_A:   { label:'서비스팀 A',        color:'badge-blue' },
+  SVC_TEAM_B:   { label:'서비스팀 B',        color:'badge-blue' },
+  INFRA_TEAM:   { label:'인프라팀',          color:'badge-yellow' },
+  TENANT_OPS:   { label:'테넌트 운영',       color:'badge-yellow' },
+  COMPUTE_OPS:  { label:'컴퓨트 운영',       color:'badge-green' },
+  STORAGE_TEAM: { label:'스토리지팀',        color:'badge-red' },
+  SEC_TEAM:     { label:'보안팀',            color:'badge-red' },
+  ON_CALL:      { label:'온콜 에스컬레이션', color:'badge-red' },
 };
+const ACTIONS = Object.keys(ACTION_META);
+const ACTION_COLORS = Object.fromEntries(
+  Object.entries(ACTION_META).map(([k,v]) => [k, v.color])
+);
 let currentIncidentId = null;
 
 document.getElementById('sample-select').onchange = function() {
@@ -175,7 +227,7 @@ async function analyzeLog() {
   const log = document.getElementById('log-input').value.trim();
   if (!log) return alert('로그를 입력하세요.');
   const content = document.getElementById('analysis-content');
-  content.innerHTML = '<span class="loading">분석 중...</span>';
+  content.innerHTML = '<span class="spinner"></span><span class="loading">분석 중... (임베딩 → 벡터 검색 → LLM 추론)</span>';
   document.getElementById('action-area').style.display = 'none';
 
   try {
@@ -240,7 +292,7 @@ async function rejectIncident() {
   const data = await res.json();
   alert(`✘ 거절 완료 (${currentIncidentId})\n골드 데이터로 저장: ${action}`);
   document.getElementById('action-area').style.display = 'none';
-  loadStats(); loadRecentIncidents();
+  loadStats(); loadRecentIncidents(); checkGold();
 }
 
 async function runAutoDemo() {
@@ -288,9 +340,91 @@ async function loadRecentIncidents() {
   } catch(e) {}
 }
 
+// ── 골드 데이터 0 가드 ──────────────────────────────────────────
+let goldPollTimer = null;
+async function checkGold() {
+  try {
+    const s = await fetch('/api/gold/status').then(r => r.json());
+    const banner = document.getElementById('gold-guard');
+    const msg = document.getElementById('gold-guard-msg');
+    const btn = document.getElementById('gold-guard-btn');
+    if (s.running) {
+      banner.style.display = 'flex';
+      const p = s.progress || {};
+      msg.textContent = `골드 생성 중... (${p.done || 0}/${p.total || 0}) — 생성 ${p.generated || 0}건`;
+      btn.disabled = true; btn.style.opacity = .5;
+      if (!goldPollTimer) goldPollTimer = setInterval(checkGold, 3000);
+    } else if (!s.exists || s.count === 0) {
+      banner.style.display = 'flex';
+      msg.textContent = '골드 데이터가 없습니다. 플라이휠 효과 시연 전에 골드를 생성하세요.';
+      btn.disabled = false; btn.style.opacity = 1;
+      if (goldPollTimer) { clearInterval(goldPollTimer); goldPollTimer = null; }
+    } else {
+      banner.style.display = 'none';
+      if (goldPollTimer) { clearInterval(goldPollTimer); goldPollTimer = null; }
+    }
+  } catch(e) {}
+}
+async function generateGold() {
+  await fetch('/api/gold/generate', { method: 'POST' });
+  checkGold();
+}
+
+// ── LLM 연결 사전 체크 (DGX/Claude 도달 여부) ───────────────────
+async function checkLLM() {
+  const el = document.getElementById('llm-status');
+  try {
+    const r = await fetch('/api/gold/test').then(r => r.json());
+    if (r.ok) {
+      el.className = 'llm-pill ok';
+      el.innerHTML = `<span class="llm-dot"></span>LLM ${r.backend}`;
+    } else {
+      el.className = 'llm-pill bad';
+      el.innerHTML = `<span class="llm-dot"></span>LLM 연결 실패`;
+      el.title = r.error || 'LLM 백엔드 도달 불가';
+    }
+  } catch(e) {
+    el.className = 'llm-pill bad';
+    el.innerHTML = `<span class="llm-dot"></span>LLM 확인 불가`;
+  }
+}
+
+// ── 팀코드 범례 렌더 ────────────────────────────────────────────
+function renderLegend() {
+  document.getElementById('legend-grid').innerHTML = Object.entries(ACTION_META).map(([code, m]) =>
+    `<div style="display:flex; align-items:center; gap:8px; font-size:12px;">
+       <span class="badge ${m.color}">${code}</span>
+       <span style="color:var(--muted);">${m.label}</span>
+     </div>`).join('');
+}
+
+// ── 지능형 라우팅 현황 집계 ─────────────────────────────────────
+async function renderRouting() {
+  try {
+    const rows = await fetch('/api/incidents/recent?limit=500').then(r => r.json());
+    const counts = {};
+    for (const c of ACTIONS) counts[c] = 0;
+    for (const r of rows) if (r.recommended_action in counts) counts[r.recommended_action]++;
+    const max = Math.max(1, ...Object.values(counts));
+    const ordered = ACTIONS.slice().sort((a, b) => counts[b] - counts[a]);
+    document.getElementById('routing-grid').innerHTML = ordered.map(code => {
+      const n = counts[code], m = ACTION_META[code], pct = Math.round(n / max * 100);
+      return `<div class="stat-card" style="text-align:left; padding:10px 12px;">
+        <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:6px; gap:6px;">
+          <span class="badge ${m.color}">${code}</span>
+          <strong style="font-size:18px; color:${n > 0 ? 'var(--accent)' : 'var(--muted)'};">${n}</strong>
+        </div>
+        <div style="font-size:11px; color:var(--muted); margin-bottom:6px;">${m.label}</div>
+        <div class="conf-bar" style="width:100%;"><span class="conf-fill" style="width:${pct}%;"></span></div>
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
 // 폴링
-loadStats(); loadRecentIncidents();
-setInterval(() => { loadStats(); loadRecentIncidents(); }, 3000);
+renderLegend();
+loadStats(); loadRecentIncidents(); renderRouting(); checkGold(); checkLLM();
+setInterval(() => { loadStats(); loadRecentIncidents(); renderRouting(); }, 3000);
 </script>
 </body>
 </html>
