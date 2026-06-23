@@ -9,7 +9,6 @@ import pathlib
 import uuid
 from datetime import datetime
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from db.models import EvalResult
 from db.database import AsyncSessionLocal
 from analyzer.llm_client import embed_texts

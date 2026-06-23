@@ -1,0 +1,4 @@
+# Dev-only tooling for the pre-commit hook (lint + test).
+# Install:  pip install -r requirements-dev.txt
+ruff>=0.6.0
+pytest>=8.0.0

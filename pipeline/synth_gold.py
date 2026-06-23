@@ -147,7 +147,6 @@ async def _save_to_db(rows: list[dict]) -> None:
     """gold 데이터를 scenarios 테이블에 저장 (embedding 없이 텍스트만)."""
     from db.database import AsyncSessionLocal
     from db.models import Scenario
-    from sqlalchemy import select
 
     async with AsyncSessionLocal() as db:
         # 기존 synth_gold 행 삭제 후 재삽입

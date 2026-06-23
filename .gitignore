@@ -8,3 +8,4 @@ data/openstack/
 .DS_Store
 *.docx
 .claude/
+.gstack/

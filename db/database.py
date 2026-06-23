@@ -56,7 +56,9 @@ async def get_db() -> AsyncSession:
 async def init_db():
     from db.models import Base as ModelBase, LLMSettings, Scenario
     from sqlalchemy import select, text
-    import yaml, pathlib, os
+    import yaml
+    import pathlib
+    import os
 
     engine = _get_engine()
 

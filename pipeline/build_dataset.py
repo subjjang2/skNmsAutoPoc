@@ -11,7 +11,6 @@ import json
 import pathlib
 import random
 import re
-import sys
 import yaml
 
 DATA_DIR = pathlib.Path(__file__).parent.parent / "data" / "openstack"

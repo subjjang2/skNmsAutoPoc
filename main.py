@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from sqlalchemy import select, text
@@ -436,12 +436,13 @@ async def generate_gold(per_scenario: int = 30):
     _bg_tasks.add(task)
     task.add_done_callback(_bg_tasks.discard)
     return {"status": "started", "per_scenario": per_scenario,
-            "message": f"백그라운드 생성 중 — 완료 후 gold_pool.json 저장"}
+            "message": "백그라운드 생성 중 — 완료 후 gold_pool.json 저장"}
 
 
 @app.get("/api/gold/status")
 async def gold_status(db: AsyncSession = Depends(get_db)):
-    import pathlib, json as _json
+    import pathlib
+    import json as _json
     p = pathlib.Path("data/openstack/gold_pool.json")
     file_count = len(_json.loads(p.read_text(encoding="utf-8"))) if p.exists() else 0
 

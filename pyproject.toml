@@ -1,0 +1,21 @@
+# Tool config only (no packaging) — consumed by the pre-commit hook.
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["__pycache__", ".venv", "venv", "history", "evaluation/data"]
+
+[tool.ruff.lint]
+# Conservative starter set: pyflakes (F) + a slice of pycodestyle (E).
+# Keep it lenient for a POC — tighten later.
+select = ["E", "F"]
+ignore = [
+  "E501",  # line length handled by formatter, not blocking
+  "E402",  # module-level import not at top (load_dotenv-before-import pattern)
+  "E711",  # `== None` — intentional in SQLAlchemy filter expressions
+  "E712",  # `== False`/`== True` — REQUIRED in SQLAlchemy filters (`not col` breaks SQL gen)
+  "E741",  # ambiguous var name `l` — style nit, not worth blocking a POC commit
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

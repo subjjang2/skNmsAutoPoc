@@ -1,142 +1,190 @@
-# DIBA 스타일 NMS 대시보드 구현 (단계적)
+# DIBA 자율운영 NMS PoC — 구현 계획 (실제 동작 우선)
 
-> 복원용 계획서. 다음 세션에 "sitedata/DIBA_PLAN.md 읽어줘"로 전체 맥락 + 진행상황 복원.
-> 각 Phase 완료 시 아래 진행 체크리스트를 `[x]`로 갱신하고 재커밋.
+> 복원용 계획서 + 진행 추적. 다음 세션에 "sitedata/DIBA_PLAN.md 읽어줘"로 전체 맥락 + 진행상황 복원.
+> 각 Phase 완료 시 아래 체크리스트를 `[x]`로 갱신하고 재커밋.
 
 ## Context
 
-상사가 참고로 제시한 Lovable 앱 "DIBA Platform"을 현재 AI NMS POC 프로젝트의 데이터·API로 재현한다.
-참고 자료: `sitedata/site.md`(기능 명세), `sitedata/DIBA-platform-interactions.gif`(/brief·/timeline·/decisions 인터랙션),
-`sitedata/image.png`(홈/랜딩 화면). 참고 앱은 React Router + Zustand + Recharts 기반이고,
-공통 레이아웃은 **Sidebar(좌) + MainContent(중) + Agent Chat(우)** 3단이다 (홈은 Agent Chat 없는 풀스크린 히어로).
+상사가 참조로 준 자료는 **3층**이다: (1) 사업기획서 PDF(`sitedata/SK신사업_AI readable data 사업기획서_20260622.pdf`) — CASTIS가 SKB 수주를 위해 그린 자율운영 NMS **비전+PoC 시나리오**, (2) `sitedata/site.md`·`image.png`·`gif` — 화면 **프론트 시안(Lovable 목업)**, (3) 기존 `skNmsAuto` — 저 비전의 **극히 일부를 실제 구현**한 코드(로그→Drain3→pgvector→LLM 추천).
 
-목표: 동일 레이아웃·로직·인터랙션을 우리 스택(FastAPI + Jinja2 + vanilla JS + Chart.js)으로 재현하되,
-정적 mock 대신 **기존 Incident/Scenario/EvalResult 데이터·API**에 연결한다.
-**전체 범위가 크므로 천천히, 작은 단위로 단계적으로 진행한다.** 각 Phase는 독립 커밋, 사용자 확인 후 다음 단계로.
+결정: **"실제 동작 우선"**(화면 연출보다 파이프라인 실제 구현) + **스택은 추천대로(Jinja 유지)**. 기존 프로젝트를 "재현/비교 기준"으로 삼지 말고, **기획서+sitedata를 1차 기준**으로 설계하되 기존 코드는 **재활용 부품**으로만 참조한다.
 
-핵심 스택 차이: 참고 앱은 SPA라 route 이동 시 메모리 상태(채팅/세션)가 유지되지만, 우리는 Jinja 멀티페이지(풀 리로드)다.
-→ Agent Chat 메시지·세션·HITL·승인 상태는 **localStorage**로 페이지 간 유지한다 (Zustand 대체).
+목표: 기획서의 핵심 가치인 **"AI Readable 변환 → 자율 조치 추천 → HITL 승인"** 파이프라인을 DIBA(HFC/방송망) 도메인으로 **진짜로 동작**시키고, sitedata 화면에 바인딩한다. 실 DIBA 데이터는 없으므로 기획서 p15 시나리오 표 기반 **합성 데이터**로 구동한다.
 
-라우트 충돌 방지: 기존 `/`(6단계 플라이휠 UI), `/accuracy`, `/admin`은 그대로 둔다.
-신규 DIBA 페이지는 **`/diba`(홈), `/diba/timeline`, `/diba/brief`, `/diba/decisions`** 로 분리한다.
+## 스택 결정 (추천)
 
-## 기존 코드 재사용
+- **백엔드**: 기존 FastAPI/Python 그대로. `POST /api/logs`가 이미 도메인 무관 전체 파이프라인(`drain_add→embed_texts→search_similar→recommend→Incident`, `main.py:198-243`)을 실행 → 라벨/시나리오만 교체하면 DIBA 로그가 그대로 흐른다. DGX/Claude 폴백·pgvector raw SQL·Drain3 상태복원 등 까다로운 부분 이미 해결됨.
+- **프론트**: **Jinja2 + vanilla JS + Chart.js 유지**(React 비추천). "실제 동작 우선"엔 빌드/번들 오버헤드가 과투자. localStorage로 페이지 간 상태(채팅/세션/HITL/승인) 유지.
+- 라우트 분리: 기존 `/`·`/accuracy`·`/admin` 유지, 신규 `/diba`·`/diba/timeline`·`/diba/brief`·`/diba/decisions`.
 
-- HTML 서빙 패턴: `main.py`의 `@app.get("/", response_class=HTMLResponse)` → `templates.TemplateResponse(request, "x.html")` (`main.py:139-157`)
-- 템플릿: `templates/` (현재 `dashboard.html`/`accuracy.html`/`admin.html` — 인라인 CSS/JS, 빌드 없음)
-- 다크 테마 CSS 변수 재사용 + DIBA 청록(teal)·퍼플 액센트 추가
-- Chart.js: `accuracy.html`에 이미 CDN 로드됨 (Recharts 대체 — 추세 선/점선 그래프)
-- 액션 배지 맵: `dashboard.html`의 `ACTION_COLORS`/`ACTION_META`
-- 소비할 기존 API: `GET /api/stats`, `GET /api/incidents/recent`, `GET /api/incidents/{id}`,
-  `POST /api/incidents/{id}/approve|reject`, `POST /api/logs`, `GET /api/eval/curve`, `POST /api/demo/auto`
+## 기획서 12개 모듈 → PoC 처리 구분
 
-## 미결정 사항 (다음 세션에 먼저 정할 것)
+- **실제 구현(6)**: Core Data Collector(로그 주입), **Ontology Pipeline Transformer**(AI Readable 변환), **Generative Agent**(플레이북), **Autonomy Policy Studio**(Confidence+Blast Radius), Multi-Vendor Action Adapter(명령 컴파일은 실제·전송은 시뮬), Vector DB(pgvector 기존).
+- **연계 시뮬(2)**: Action Adapter 장비 전송, Rollback Orchestrator(reject 플로우 재활용).
+- **목업/연출(4)**: Predictive ML(시계열 패턴매칭), MCP Gateway(배지 표기), Digital Twin Simulator(before/after 연출), Time-Series/Semantic Graph DB(합성 시계열·정적 SVG·JSON 컬럼).
 
-**데이터 도메인 차이**: 상사 참고 화면(DIBA)은 케이블/방송망(HFC) 도메인(`QAM-E11`, `CM`, `채널 송출 SLA`,
-`Edge 울산`, 전국 권역 헬스)이고, 우리 프로젝트는 OpenStack 클라우드 로그(`nova`, `neutron`, 10종 팀 액션코드)다.
+핵심 한 줄 `로그→변환→검색→플레이북→거버넌스→HITL`은 끝까지 진짜로 흐른다.
 
-- UI·로직·인터랙션은 데이터와 **무관하게 100% 구현 가능**.
-- 우리 action 10종은 *내부 식별자라 이름에 의미 없고* LLM이 과거 유사 케이스 임베딩으로만 라우팅(`llm_client.py:16-22`).
-  → **통신/방송망 스타일 로그를 넣어도 동일 파이프라인이 그대로 동작**. 라벨만 매핑하면 됨.
-- 미결정 선택지:
-  - (A) **DIBA 톤 데모 시드**: 통신/방송망 스타일 로그를 시드로 생성·주입 → 상사 화면과 톤 일치, 데모 임팩트 ↑
-  - (B) **OpenStack 그대로**: 실제 인시던트 표시 → 가장 빠르고 실제 파이프라인 증명, 단 도메인 톤 다름
-  - (C) **둘 다(토글)**: 실제 파이프라인 유지 + 데모용 DIBA 시드 토글
-  - 시드 생성 방식(A/C 선택 시): 정적 샘플 JSON(간단) vs 기존 synth_gold/build_dataset 파이프라인 재사용
-- **이 결정이 Phase 1의 데이터 연동·시드 부분에 영향**. 화면 골격(셸/홈)은 결정과 무관하게 먼저 진행 가능.
+## DIBA 도메인 전환
 
-## 진행 체크리스트
+### ACTION 라벨 (기획서 p15 조치 기반, 10종 유지 → 기존 baseline/곡선 설계 그대로)
+`PROC_RESTART`(프로세스 재기동) · `CONFIG_ROLLBACK`(Config Diff 롤백) · `HW_FAILOVER`(Standby 절체) · `HW_RECOVER`(절체 복구) · `STREAM_RETRY`(스트림 재구동) · `MEDIA_FAILOVER`(미디어 Failover) · `QAM_RECLAIM`(세션 강제회수) · `CM_TRACE`(가입자 역추적) · `RMS_REPORT`(Trap 보고) · `WATCH`(감시 지속·fallback)
 
-- [x] Step 0: DIBA_PLAN.md 저장 + 커밋
-- [ ] Phase 1: 공통 셸(diba_base.html) + 홈(/diba)
-- [ ] Phase 2: /diba/timeline
-- [ ] Phase 3: /diba/brief
-- [ ] Phase 4: /diba/decisions
+p15의 4분류(서버·프로세스 / 하드웨어·네트워크 / 미디어스트림·채널품질 / 가입자·QAM대역폭)를 `Scenario.category` 메타로 추가.
 
-## 공통 기반 (Phase 1에서 1회 구축)
+### 합성 데이터
+- `config/scenarios.yaml` DIBA 40종 재작성(분류별 8~12개, 스키마 동일). hold_out은 분류별 1~2개.
+- `pipeline/synth_gold.py` 프롬프트만 "DIBA HFC/SDV NMS log generator"로 교체(`:45-52`), 구조 무수정.
+- `pipeline/build_dataset.py` `_augment()` 정규식을 DIBA 엔티티(`sdv-core-\d+`, QAM 슬롯, CM MAC)로 교체(`:48-51`). 분할/층화 무수정.
 
-- `templates/diba_base.html`: 사이드바 + (옵션)Agent Chat + 공통 CSS/JS, `{% block content %}`로 메인 주입
-  - 사이드바: 로고 "DIBA Platform" + 네비(Home/Brief/Action Timeline/Decision Card) + Sessions 목록 + "AI Gateway · Online"
-  - 공통 JS: `sendAgentMessage(text)`, 세션 생성, HITL 토글 — localStorage 키 `diba_chat_messages`/`diba_sessions`/`diba_hitl`/`diba_card_approvals`
-- 기존 템플릿(dashboard 등)은 상속하지 않음 → 회귀 위험 없음
+## AI Readable 변환 계층 (신규 `pipeline/ontology.py`)
+
+**하이브리드**(규칙 1차 + LLM 보강). Drain3 템플릿 슬롯+정규식으로 Entity(`Process/Node/NIC/QAM/CM/Channel/SGID/Disk`)·Property(`pid/link_state/temp/bitrate/cc_error/usage_pct/zapping_rate`)·Relationship(`runs_on/serves/streams/connected_to/affects`) 추출 → `{entities,relationships,event}` JSON. 규칙 미스 시 `synth_gold.py:31-39`의 `_extract_json_array` 재활용해 LLM 1회 보강.
+출력 활용: 임베딩 입력에 엔티티/관계 포함(검색 정확도↑), Blast Radius 산정, UI 토폴로지·실행로그·판단근거, `Incident.ontology` JSON 컬럼 저장.
+
+## 거버넌스 (신규 `analyzer/governance.py`)
+
+Confidence(기존 `recommend()` 0-100) × Blast Radius(action+entity 규모 기반 **결정적 규칙**: `HW_FAILOVER/MEDIA_FAILOVER`=High, `QAM_RECLAIM`(단일 CM)/`RMS_REPORT`=Low, `CONFIG_ROLLBACK`=Medium) → 2D 정책 매트릭스 `AUTO/APPROVE(HITL)/FORBID`. 기존 `POST /api/demo/auto`(`main.py:582-607`) threshold 로직을 매트릭스로 확장.
+
+## 유닛 테스트 전략
+
+기존 컨벤션 유지: **함수형 pytest, fixture 없음, `tests/` 단일 디렉토리, dependency-free 우선**(`tests/test_smoke.py` 패턴). 무거운 의존성은 `pytest.importorskip(...)`로 우회. pre-commit 게이트(`.claude/hooks/pre_commit_check.py:90-98`)가 `pytest -q` 실행.
+
+**우선순위 = 외부 의존 없는 결정적 로직**(DB/LLM 불필요하게 함수 설계). PoC 테스트 ROI의 핵심:
+- `analyzer/governance.py` — Blast Radius 규칙 + (confidence×blast)→정책 매트릭스. **경계값 테이블 테스트**(conf=84/85, Low/High 조합).
+- `pipeline/ontology.py` — 규칙 기반 추출기. 4분류 대표 로그 → 기대 JSON. (LLM 보강 경로는 분리, LLM은 모킹/스킵).
+- `analyzer/action_adapter.py` — action→CLI 문자열 컴파일. action별 기대 문자열 검증.
+- `config/scenarios.yaml` 라벨 교체 시 `tests/test_smoke.py`의 `EXPECTED_ACTIONS`도 DIBA 10종으로 갱신(드리프트 가드).
+
+**모킹/스킵**: LLM(`openai`/`anthropic`)·DB(pgvector)·Drain3 싱글톤이 닿는 함수는 순수 코어와 분리, 통합 경로는 라이브 검증(API curl/곡선)으로 대체. 테스트 파일 분리: `tests/test_governance.py`·`test_ontology.py`·`test_action_adapter.py`.
+
+## 단계적 구현 — 세분화 체크리스트
+
+> 한 Phase = 한 커밋. 백엔드 파이프라인 먼저·UI 나중. 각 Phase 완료 → 사용자 확인 → 다음.
+> 상태 표기: `[ ]` 미구현 · `[~]` 진행중 · `[x]` 구현완료. (현재 전부 미착수)
+
+### Phase 0 — 도메인 라벨/시나리오 전환 `[ ]`
+- [ ] `analyzer/llm_client.py:16-22` ACTIONS를 DIBA 10종으로 교체
+- [ ] `analyzer/llm_client.py:24-31` system prompt를 DIBA(HFC/SDV) 라우팅 지시로 교체
+- [ ] `config/scenarios.yaml` DIBA 40종 재작성(4분류 × 8~12개, `category` 필드 추가)
+- [ ] `main.py` action 검증 set 교체(approve/reject 포함, 총 3곳)
+- [ ] `tests/test_smoke.py` `EXPECTED_ACTIONS`를 DIBA 10종으로 갱신(드리프트 가드)
+- [ ] (학습곡선 관련 `majority_baseline`·`hold_out`은 DIBA 범위 제외 — 손대지 않음)
+- [ ] 검증: `POST /api/logs -d '{"log":"CiSDVTranscaster pid=20481 exited with SIGSEGV"}'` → `PROC_RESTART`
+
+### Phase 1 — AI Readable 변환 계층 `[ ]`
+- [ ] 신규 `pipeline/ontology.py` 규칙 추출기(Entity/Property/Relationship)
+- [ ] LLM 보강 경로(`synth_gold._extract_json_array` 재활용)
+- [ ] `db/models.py` `Incident.ontology` JSON 컬럼 + idempotent ALTER
+- [ ] `main.py:198-243` `/api/logs`에 변환 단계 삽입 + 임베딩 입력에 엔티티 포함
+- [ ] 유닛 테스트 `tests/test_ontology.py`: 4분류 대표 로그 → 기대 entities/relationships(규칙부, dependency-free)
+- [ ] 검증: 동일 category 검색 매칭, 라이브 `/api/logs` ontology 필드 확인
+
+### Phase 2 — 합성 데이터 시드 구축 (유사 케이스 지식베이스) `[ ]`
+> 목적: 실 DIBA 데이터가 없으므로 벡터DB/시나리오를 채워 추천 파이프라인이 돌게 함.
+> ⚠️ 학습곡선/플라이휠(`/accuracy`·`/api/eval/*`·majority_baseline·hold_out)은 **기존 skNmsAuto 고유 데모**로 DIBA 기획서·sitedata 화면엔 없음 → **DIBA 범위 제외**. 기존 `/accuracy`는 건드리지 않고 그대로 둔다.
+- [ ] `pipeline/synth_gold.py:45-52` 프롬프트 DIBA화 (4분류 시나리오별 변형 로그 생성)
+- [ ] `pipeline/build_dataset.py:48-51` `_augment` 정규식 DIBA 엔티티로 교체
+- [ ] `pipeline/log_loader.py` 코퍼스 의존 완화(합성 rows 기반)
+- [ ] 시드 적재 → `scenarios` 벡터DB를 DIBA 4분류 케이스로 채움
+- [ ] 검증: 4분류 로그 POST → 같은 category 유사 케이스 검색되어 추천에 반영
+
+### Phase 3 — 거버넌스(Confidence × Blast Radius) `[ ]`
+- [ ] 신규 `analyzer/governance.py` Blast Radius 결정 규칙
+- [ ] 2D 정책 매트릭스 `AUTO/APPROVE/FORBID`
+- [ ] `main.py:582-607` `/api/demo/auto` threshold를 매트릭스로 확장
+- [ ] `db/models.py` `Incident.blast_radius` 컬럼
+- [ ] 유닛 테스트 `tests/test_governance.py`: (confidence×blast) 경계값 테이블(conf=84/85, Low/High 조합)→정책, dependency-free
+- [ ] 검증: 라이브 blast=High→APPROVE / Low+highconf→AUTO
+
+### Phase 4 — Action Adapter + Rollback `[ ]`
+- [ ] 신규 `analyzer/action_adapter.py` 벤더 명령어 컴파일(action별 CLI 문자열)
+- [ ] revert 명령 생성(시뮬), reject 플로우 재활용
+- [ ] 유닛 테스트 `tests/test_action_adapter.py`: action별 기대 CLI 문자열 + revert 문자열(dependency-free)
+- [ ] 검증: 라이브 approve→실행 / reject→rollback
+
+### Phase 5 — 공통 셸 + 홈 `/diba` `[ ]`
+- [ ] 신규 `templates/diba_base.html`(사이드바+AgentChat+공통 CSS/JS+localStorage)
+- [ ] 신규 `templates/diba_home.html`(Orb·"안녕하세요 매니저님"·지표 5카드·빠른질문 칩)
+- [ ] `main.py` `/diba` 라우트
+- [ ] 검증: 지표 카드 `/api/stats` 반영, `image.png` 대비 `browse` 스크린샷
+
+### Phase 6 — `/diba/timeline` `[ ]`
+- [ ] 신규 `templates/diba_timeline.html`(카드=`/api/incidents/recent`, Agent execution tree 토글)
+- [ ] Agent Chat 전송 → `/api/logs` 실호출 + 스트리밍 연출
+- [ ] 소셜 버튼 +1·공유 클립보드(로컬)
+- [ ] `main.py` `/diba/timeline` 라우트
+- [ ] 검증: 로그 POST→타임라인 신규 카드, GIF frame 대비
+
+### Phase 7 — `/diba/brief` `[ ]`
+- [ ] 신규 `templates/diba_brief.html`(헬스스코어·이슈브리핑·Agent Goal·우선순위 액션 P1~P3)
+- [ ] 토폴로지 SVG(목업) + 실행로그(ontology THOUGHT/TOOL/RESULT/CLI/MIB)
+- [ ] "승인 요청"→`/api/incidents/{id}/approve`, "상세"→`/diba/decisions#card-{id}`
+- [ ] `main.py` `/diba/brief` 라우트
+- [ ] 검증: 헬스 색상 분기, 승인→status 변경
+
+### Phase 8 — `/diba/decisions` `[ ]`
+- [ ] 신규 `templates/diba_decisions.html`(Decision Card=`WAIT_APPROVAL`)
+- [ ] TTF 카운트다운(목업 타이머), Confidence×BlastRadius 판단근거
+- [ ] Inline Metrics Chart.js(실선=현재/점선=예측), 즉시실행/예약/취소
+- [ ] "N건 대기" 배지 자동계산, `main.py` `/diba/decisions` 라우트
+- [ ] 검증: TTF 감소, "즉시 실행"→approve+최상단, 배지 자동계산
+
+### Phase 9 (선택) — 데모 오케스트레이션 `[ ]`
+- [ ] 합성 로그 4분류 순차 POST 스크립트
+- [ ] HITL ON/OFF 토글 연동
+- [ ] 검증: 데모 스크립트→4분류 인시던트 흐름
+
+### 회귀(매 Phase 공통) `[ ]`
+- [ ] 기존 `/`·`/accuracy`·`/admin` 정상
+- [ ] `ruff check .` · `pytest -q` · 커밋 게이트(`.claude/hooks/pre_commit_check.py`) 통과
+
+## 재활용 vs 신규
+
+- **무수정 재활용**: `pipeline/vector_store.py`, `db/database.py`, `evaluation/experiment.py`·`evaluator.py`, `analyzer/drain_miner.py`, `pipeline/embedder.py`, `main.py` 인프라 라우트(`/api/incidents/*`·`/api/stats`·`/api/eval/*`·`/api/gold/*`).
+- **소폭 수정**: `config/scenarios.yaml`, `analyzer/llm_client.py`(`:16-31`), `pipeline/synth_gold.py`(`:45-52`), `pipeline/build_dataset.py`(`:48-51`), `db/models.py`(`Scenario.category`+`Incident.ontology/blast_radius`), `main.py`(`/api/logs` 삽입·검증 set·baseline·`/diba/*` 라우트), `pipeline/log_loader.py`(코퍼스 의존 완화).
+- **신규**: `pipeline/ontology.py`, `analyzer/governance.py`, `analyzer/action_adapter.py`, `templates/diba_{base,home,timeline,brief,decisions}.html`, `tests/test_{governance,ontology,action_adapter}.py`, (선택) 데모 스크립트.
+
+## 주의 (기존 코드 함정)
+
+- `EMBED_DIM`은 import 시점에 읽힘(`models.py`) — 임베딩 차원 ≠ 384면 `.env` 명시.
+- `db/database.py:77-78` hold_out 하드코딩 — **학습곡선 전용(DIBA 범위 제외)**. DIBA 시나리오 ID와 안 맞으면 no-op이라 무해. 기존 `/accuracy`를 살릴 때만 갱신.
+- action 검증 set이 3곳 중복(`llm_client.py:16`, `main.py` approve/reject) — 라벨 교체 시 3곳 모두.
+- `vector_store` embedding은 raw SQL 필수(ORM 불가) — 임베딩 경로 건드리지 말 것.
 
 ---
 
-## Phase 1 — 공통 셸 + 홈(`/diba`)  ← 먼저, 가장 작게
+# 인터뷰 질문 (착수 전 확보)
 
-신규: `templates/diba_base.html`, `templates/diba_home.html` / `main.py` 라우트 `/diba`
-홈 화면(`sitedata/image.png`):
-- 글로우 오브 히어로(CSS radial-gradient 구체 + blur), "안녕하세요, 매니저님." + 서브타이틀 + "현재 DIBA 시스템은 매우 안정적입니다."
-- 중앙 커맨드 입력창 + 전송(↑), `Enter 전송 · Shift+Enter 줄바꿈`. 전송 시 → `/diba/timeline`로 이동하며 쿼리를 Agent Chat에 주입(localStorage 경유) **또는** 인라인 응답
-- 빠른질문 칩 6~7개(명세 그대로): 24시간 브리핑 / 우선순위 액션 / QAM-E11 구간 분석 / 디스크 정리 계획 / 토폴로지 / HITL 요약 / SLA 리포트 → 클릭 시 입력창 채우거나 즉시 전송
-- 하단 지표 카드 5개: `OVERALL HEALTH`(=`/api/stats.latest_match_rate` 또는 종합), `등급 이슈`(저신뢰/미승인 incident 수), `승인 대기`(WAIT_APPROVAL 수), `채널 송출`(고정/uptime 표기), `자원 회수`(처리 완료 수) — 데이터 없으면 0/placeholder
-- 푸터 `DIBA시 · SIMULATION BUILD · ALL ACTIONS REQUIRE HITL APPROVAL`
+> 자료가 3층(비전 PDF / 목업 시안 / 기존 코드)이라 **범위·데이터·도메인**이 미정. 아래 답을 받으면 "진짜 구현 vs 연출" 선이 확정되고 합성 데이터가 사실적으로 바뀐다.
 
-검증: `/diba` 렌더, 지표 카드가 `/api/stats` 반영, 칩 클릭→입력창/이동 동작. `browse`로 `image.png` 대비 스크린샷 비교.
+## A. 상사에게 (범위·목적 결정 — 1순위)
 
----
+1. 이 자료는 **참고 시안 / 똑같이 구현할 스펙 / 방향 제시** 중 무엇인가? (DIBA 화면은 Lovable 프론트 목업이라 "똑같이"인지 "참고만"인지로 일이 갈림)
+2. 이걸로 **누구에게 무엇을** 보여주는 게 목표인가? (경영진 데모 / 고객 제안 / 제품 기획 출발점)
+3. "Narrow & Strong PoC"의 **Narrow 정의**는? p15 4개 시나리오 중 1~2개만 깊게 가나?
+4. PoC **데모 일정과 대상**(SKB 누구에게, 언제)은?
+5. 기획서 12개 모듈 중 **실제 동작으로 구현할 범위**는 어디까지? (Digital Twin·Rollback·Ontology·Multi-Vendor Adapter는 각각 큰 작업 — 목업 허용 여부)
+6. **Public AI(Claude/GPT) 호출 허용** vs Internal SLM만? 환각 통제 요구 수준은?
 
-## Phase 2 — `/diba/timeline` (site.md 73-93, GIF)
+## B. DIBA 운영팀원에게 (사실·샘플 확보 — 합성 데이터 품질 직결)
 
-신규: `templates/diba_timeline.html` / 라우트 `/diba/timeline`
-- 헤더 "Action Timeline / 자동조치 및 실행 흐름 보기"
-- 카드 = `/api/incidents/recent` 최신순. 카드: 작성자 `DIBA시 @autonomous-agent · {HH:MM} KST` + 우상단 상태 배지
-  - 상태 매핑: `APPROVED|AUTO→ACHIEVED`(100%), `WAIT_APPROVAL|ANALYZING→ACTIVE`(72%), `NEW→MONITORING`(88%)
-  - 제목=`recommended_action` 라벨, `trigger:`=`drain_template`, 따옴표 근거=`llm_reason`, 진행률 바 + `confidence` before→after
-  - 소셜 버튼(댓글/리트윗/좋아요) +1 로컬 상태, 공유=클립보드 복사 + "복사됨" 툴팁
-  - `N sub-tasks · Agent execution tree` 토글 → `/api/incidents/{id}`의 `similar_cases` 펼침(첫 카드만 초기 펼침)
-  - sub-task 버튼(센서 트리거 / CLI 트랜잭션 / Diff) → `sendAgentMessage()`로 우측 채팅 전송
-- 우측 Agent Chat: 고정 첫 메시지 + 빠른질문 + 입력. 전송 → user 메시지 → 세션 자동 생성 → "TASK PROGRESS 1/4" 진행바 → `/api/logs` 호출 → agent 응답 스트리밍
-- 데이터 0건이면 "데모 생성"(`/api/demo/auto`/샘플 분석) 안내
+**1순위 — 이 둘만 받아도 PoC 품질 급상승**
+1. **실제 로그 샘플 5~10줄**(마스킹 가능): 프로세스 비정상 종료(CiSDVTranscaster/Manager), NIC Fail, QAM 슬롯 에러, CC Error, Zapping 등의 **진짜 Syslog/SNMP Trap 원문**. → `pipeline/ontology.py` 파싱 근거.
+2. 그 장애들을 **지금 사람이 어떤 CLI 명령으로 처리**하나? (재기동/failover execute/Config Diff 롤백/QAM 세션 회수 — 한 줄씩). → `analyzer/action_adapter.py` 명령 문자열 근거.
 
----
+**2순위 — 명명 규칙(합성 사실성)**
+3. 엔티티 이름 규칙: 호스트명 패턴(`sdv-core-03` 가정 맞나), 핵심 프로세스명, QAM/RFGW 슬롯·CM MAC·SGID·채널(SDV/BCAST) 표기.
+4. 임계치 숫자 검증: 디스크 70/95%, QAM 88~95%, Low Input Traffic 5회·5초, Zapping 분당 20회(p15 기준)가 실제와 맞나.
 
-## Phase 3 — `/diba/brief` (site.md 32-69)
-
-신규: `templates/diba_brief.html`
-- 헬스 스코어 카드: 전체=하위 평균, `/api/stats`+`/api/eval/curve` 최신 step `detail`(easy/medium/hard)에서 항목 점수, 88미만 오렌지/90+ 그린, 바=점수/100
-- 이슈 브리핑: 미승인/저신뢰 incident를 severity로 분류한 정적 리스트("LAST 60 MIN")
-- Agent Goal·Subtasks: Goal 1개 + subtask 배지(DONE/BLOCKED/QUEUED), "승인 더하기"→BLOCKED→DONE(로컬)
-- 우선순위 액션 카드 P1/P2/P3: `WAIT_APPROVAL` 상위 3건. "승인 요청"→`POST /approve`+버튼 "승인됨", "상세"→`/diba/decisions#card-{id}`, CLI 코드블록
-- 동적 토폴로지 맵: SVG 정적 그래프(Core/Server/QAM/Edge), 색 3단계, "시뮬레이션 레이어" 오버레이 토글, 노드클릭→`sendAgentMessage(노드명)`
-- 에이전트 실행 로그: incident의 `llm_reason`/`similar_cases`를 THOUGHT/TOOL/RESULT/CLI/MIB 로그로, "표준/코드" 토글
+**3순위 — 빈도·접근·자동화**
+5. 4분류 중 **실제로 가장 잦고·치명적인** 장애는? → 데모 시나리오 우선순위.
+6. **오탐 잦은 패턴 / 일시 노이즈 vs 실장애 구분 기준**은? → 거버넌스(confidence/FORBID) 설계.
+7. 이 로그·지표가 어디에 쌓이나(RMS·NMS·DB)? **샘플 덤프나 read 권한** 받을 경로·보안 제약은?
+8. 지금 **자동 조치 vs 사람 승인** 경계는 어디? → HITL 기준.
 
 ---
-
-## Phase 4 — `/diba/decisions` (site.md 96-124)
-
-신규: `templates/diba_decisions.html`
-- Decision Card = `WAIT_APPROVAL` incident. 상태 `pending|approved|scheduled|cancelled|expired`
-- TTF 카운트다운(매초 -1, mm:ss), 00:00→`expired`+빨간 테두리(로컬 타이머)
-- CONTEXT-DRIVEN INLINE METRICS: 펼치기 토글, 좌=예측 테이블 / 우=**Chart.js** 선그래프(실선=현재, 점선=예측)
-- AI 판단 근거: `llm_reason` 토글
-- 버튼: "지금 즉시 실행"→`POST /approve`+최상단 이동+채팅 "실행 시작됨"+버튼 "실행 중...", "새벽 02:00 예약"→`scheduled`+타이머 정지, "취소"→`cancelled`+opacity 0.4
-- 헤더 "N건 대기" 배지 = pending 카드 수 자동 계산
-
----
-
-## 수정/생성 파일 요약
-
-| 파일 | 작업 |
-|---|---|
-| `templates/diba_base.html` | 신규 — 공통 셸(Phase 1) |
-| `templates/diba_home.html` | 신규 — Phase 1 |
-| `templates/diba_timeline.html` | 신규 — Phase 2 |
-| `templates/diba_brief.html` | 신규 — Phase 3 |
-| `templates/diba_decisions.html` | 신규 — Phase 4 |
-| `main.py` | 라우트 4개 추가(`/diba`, `/diba/timeline`, `/diba/brief`, `/diba/decisions`) — 기존 패턴 동일 |
-
-새 API는 기본적으로 만들지 않음. Brief 헬스 집계가 기존 응답만으로 부족하면 `GET /api/diba/health` 경량 엔드포인트 1개만 Phase 3에서 검토.
-
-## 검증 (Phase별)
-
-- 서버: `uvicorn main:app --port 8001 --reload` 부팅 정상
-- Phase 1: `/diba` 지표 카드가 `/api/stats` 반영, 칩/입력 동작, `browse`로 `image.png` 대비 비교
-- Phase 2: `/diba/timeline` 카드 렌더·sub-task 펼침·소셜 +1·빠른질문→채팅 흐름, GIF frame 대비
-- Phase 3: `/diba/brief` 헬스 색상 분기, "승인 요청"→`/api/incidents/{id}` status 변경 확인
-- Phase 4: `/diba/decisions` TTF 감소, "즉시 실행"→approve 반영+최상단, "취소"→opacity
-- 회귀: 기존 `/`, `/accuracy`, `/admin` 정상. `ruff check .` 통과
 
 ## 진행 원칙
 
-각 Phase 완료 → 사용자 확인 → 다음 Phase. 한 번에 한 페이지씩, 천천히.
+각 Phase 완료 → 사용자 확인 → 다음 Phase. 한 번에 하나씩, 천천히. 시작점은 **Phase 0**(단, B-1/B-2 답을 먼저 받으면 합성 데이터가 사실적으로 시작 가능).

@@ -9,7 +9,6 @@ import json
 import pathlib
 import sys
 import urllib.request
-import zipfile
 
 DATA_DIR = pathlib.Path(__file__).parent.parent / "data" / "openstack"
 
